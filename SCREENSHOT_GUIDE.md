@@ -4,6 +4,13 @@ Mở http://127.0.0.1:8000. Giao diện mặc định là chat, không có kịc
 Nhập câu hỏi vào ô tin nhắn; Enter để gửi, Shift+Enter để xuống dòng.
 Tạo session mới cho mỗi bước để chứng minh agent dùng memory thay vì lịch sử chat.
 
+Để bắt đầu lại, dùng **Xóa trí nhớ** và xác nhận user cần xóa. Nút này xóa cả mục
+active/superseded của user hiện tại và mở session mới; giữ lịch sử cùng bằng
+chứng cũ. Chỉ dùng trước bước 1, không xóa giữa các bước của cùng lượt đánh giá.
+Giữa bước 3 và 4, bấm **Restart web**: ứng dụng khởi động lại tiến trình thật,
+hiện PID cũ → mới và tự mở session mới. Chụp thông báo PID cùng câu trả lời ở
+bước 4 để chứng minh trí nhớ tồn tại sau restart.
+
 | Bước | Nhập vào ô chat | Cần thấy khi chụp |
 |---|---|---|
 | 1 | Bên mình đã chốt cơ chế đăng nhập của dự án là JWT. | Agent tự gọi remember dù không có chữ "lưu/nhớ"; memory trước trống, sau có JWT |

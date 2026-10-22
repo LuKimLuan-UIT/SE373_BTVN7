@@ -257,6 +257,18 @@ chạy. Nếu không tìm thấy 9Router đã cài, script tự cài bản 0.5.1
 `data/local-router/` của dự án (lần đầu cần mạng), rồi khởi động dịch vụ.
 Có thể đổi cổng bằng `run_web -AppPort 8001`.
 
+Trên giao diện có hai nút để thử nghiệm nhanh:
+
+- **Xóa trí nhớ**: có xác nhận, chỉ xóa memory dài hạn của user hiện tại (cả mục
+  active và superseded), rồi mở session mới. Lịch sử và trace cũ vẫn được giữ để
+  đối chiếu; snapshot cũ không phải memory hiện hành. Đây là dọn dữ liệu thử,
+  không phải cơ chế sửa rò rỉ RAM.
+- **Restart web**: khởi động lại tiến trình Python/Uvicorn thật, nạp lại `.env`
+  và dữ liệu từ file; giữ nguyên 9Router, memory, lịch sử và trace. Giao diện đợi
+  kết nối lại, hiện PID trước/sau và mở session mới cho bước kiểm tra tiếp theo.
+  Nếu quá 60 giây chưa kết nối lại, chạy `run_web` và xem
+  `data/service-logs/restart-helper.log`.
+
 Hoặc từ thư mục `memory_agent`, chạy trực tiếp script PowerShell:
 
 ```powershell

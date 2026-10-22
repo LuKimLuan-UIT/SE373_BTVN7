@@ -10,11 +10,12 @@ bên phải là panel memory (index + chi tiết) và context đang inject.
 from __future__ import annotations
 
 import uuid
+import os
 import threading
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -22,6 +23,7 @@ from ..config import load_settings
 from ..runtime import injected_context, runtime_from_settings
 from ..sessions import delete_session, list_sessions, rename_session
 from ..tracing import load_trace
+from ..service_control import schedule_restart
 
 app = FastAPI(title="LangGraph Memory Lab")
 
@@ -31,6 +33,8 @@ _chat_lock = threading.RLock()
 
 def get_runtime():
     """Khởi tạo (hoặc lấy lại) runtime cho tiến trình hiện tại."""
+    if _state.get("restarting"):
+        raise HTTPException(status_code=503, detail="Ứng dụng đang khởi động lại.")
     if "runtime" in _state:
         return _state["runtime"]
 
@@ -56,6 +60,10 @@ class RenameRequest(BaseModel):
     title: str
 
 
+class ClearMemoryRequest(BaseModel):
+    user_id: str
+
+
 # -------------------------------------------------------------------- API
 @app.get("/api/health")
 def health() -> dict[str, Any]:
@@ -63,7 +71,7 @@ def health() -> dict[str, Any]:
         runtime = get_runtime()
     except HTTPException as exc:
         return {"ok": False, "detail": exc.detail}
-    return {"ok": True, "user_id": runtime.settings.user_id,
+    return {"ok": True, "pid": os.getpid(), "user_id": runtime.settings.user_id,
             "model": runtime.settings.model_name, "base_url": runtime.settings.base_url}
 
 
@@ -89,8 +97,8 @@ def messages(thread_id: str) -> list[dict[str, Any]]:
 
 @app.post("/api/chat")
 def chat(request: ChatRequest) -> dict[str, Any]:
-    runtime = get_runtime()
     with _chat_lock:
+        runtime = get_runtime()
         result = runtime.chat_with_trace(request.thread_id, request.message)
     return {"thread_id": request.thread_id, **result}
 
@@ -131,6 +139,25 @@ def context() -> dict[str, Any]:
     """Phần context thực sự được inject vào model (kiểm chứng theo yêu cầu của slide)."""
     runtime = get_runtime()
     return {"context": injected_context(runtime.settings, runtime.manager)}
+
+
+@app.post("/api/memory/clear")
+def clear_memory(request: ClearMemoryRequest) -> dict[str, Any]:
+    with _chat_lock:
+        runtime = get_runtime()
+        if request.user_id != runtime.settings.user_id:
+            raise HTTPException(status_code=409, detail="User đã thay đổi. Tải lại trang trước khi xóa.")
+        deleted = runtime.store.clear()
+        return {"ok": True, "deleted": deleted, "user_id": runtime.settings.user_id}
+
+
+@app.post("/api/server/restart")
+def restart_server(request: Request) -> dict[str, Any]:
+    with _chat_lock:
+        get_runtime()
+        schedule_restart(request.url.port or 8000)
+        _state["restarting"] = True
+        return {"ok": True, "previous_pid": os.getpid()}
 
 
 @app.post("/api/sessions/new")

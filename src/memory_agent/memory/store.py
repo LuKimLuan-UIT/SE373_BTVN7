@@ -190,6 +190,22 @@ class MarkdownMemoryStore(BaseStore):
             self.refresh_index()
             return self.index_path.read_text(encoding="utf-8")
 
+    def clear(self) -> int:
+        """Xóa memory của user hiện tại; giữ lịch sử session và user khác."""
+        with self._lock:
+            directory = self.user_dir.resolve()
+            if directory == self.root.resolve() or self.root.resolve() not in directory.parents:
+                raise ValueError("Thư mục memory phải nằm trong thư mục gốc của store.")
+            files = list(directory.glob("*.md"))
+            if any(path.is_symlink() or path.resolve().parent != directory for path in files):
+                raise ValueError("Không xóa memory qua liên kết tới thư mục khác.")
+            count = sum(len(self._parse_file(path)) for path in files if path.name != "MEMORY.md")
+            for path in files:
+                if path.name != "MEMORY.md":
+                    path.unlink()
+            self.refresh_index()
+            return count
+
     # ---------------------------------------------------------- BaseStore API
     def put(
         self,

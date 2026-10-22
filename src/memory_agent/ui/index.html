@@ -47,9 +47,12 @@
 <style>
 body{grid-template-columns:205px minmax(320px,1fr);max-width:1600px;margin:auto}.steps{display:none}.evidence{display:none}body.show-evidence{grid-template-columns:190px minmax(320px,1fr) minmax(360px,480px)}body.show-evidence .evidence,body.screenshot .evidence{display:block}body.screenshot{grid-template-columns:minmax(320px,1fr) minmax(360px,1fr)}#chat{min-height:420px}#input{width:100%}.decision{margin:12px 0;padding:10px 12px;border-radius:8px;background:#edf2ff;font-size:13px;color:var(--text)}#compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}#compare-grid h3{margin-top:6px}.demo-title .controls{display:flex;gap:8px}.session{display:block;overflow-wrap:anywhere}.screenshot #chat{min-height:200px}.screenshot #memory-slot{display:none}@media(max-width:1050px){body.show-evidence{grid-template-columns:180px 1fr}body.show-evidence .evidence{grid-column:1/-1}}@media(max-width:650px){body,body.show-evidence,body.screenshot{display:block}.demo-title .controls{flex-direction:column}.demo-title h1{font-size:22px}#compare-grid{grid-template-columns:1fr}}
 </style>
+<style>
+.demo-title .controls{flex-wrap:wrap;justify-content:flex-end}.maintenance-status{margin-top:10px;font-size:13px;color:#15764e;white-space:pre-wrap}.danger{color:#a72c3c!important;border-color:#e8b8bf!important}
+</style>
 </head>
 <body>
-<section id="demo"><div class="demo-title"><div><div class="eyebrow">SE373 · TRỢ LÝ CÓ TRÍ NHỚ</div><h1>Trò chuyện cùng dự án</h1><div class="muted demo-hint">Nhắn tin tự nhiên. Trợ lý đề xuất điều đáng nhớ; harness kiểm tra trước khi ghi.</div></div><div class="controls"><button class="ghost" onclick="document.body.classList.toggle('show-evidence')">Bằng chứng</button><button class="ghost" onclick="togglePhoto()">Chế độ chụp ảnh</button></div></div><div class="steps" id="steps"></div></section>
+<section id="demo"><div class="demo-title"><div><div class="eyebrow">SE373 · TRỢ LÝ CÓ TRÍ NHỚ</div><h1>Trò chuyện cùng dự án</h1><div class="muted demo-hint">Nhắn tin tự nhiên. Trợ lý đề xuất điều đáng nhớ; harness kiểm tra trước khi ghi.</div></div><div class="controls"><button class="ghost danger" onclick="clearMemory()">Xóa trí nhớ</button><button class="ghost" onclick="restartServer()">Restart web</button><button class="ghost" onclick="document.body.classList.toggle('show-evidence')">Bằng chứng</button><button class="ghost" onclick="togglePhoto()">Chế độ chụp ảnh</button></div></div><div id="maintenance-status" class="maintenance-status" role="status" aria-live="polite"></div><div class="steps" id="steps"></div></section>
 <aside>
   <div class="pad">
     <button style="width:100%" onclick="newSession()">+ Session mới</button>
@@ -87,6 +90,62 @@ body{grid-template-columns:205px minmax(320px,1fr);max-width:1600px;margin:auto}
 <script>
 let threadId = null;
 let busy = false;
+let currentUser = null;
+function setBusy(value) {
+  busy = value;
+  document.querySelectorAll('button,input,textarea').forEach(element => element.disabled = value);
+}
+function showHealth(health) {
+  currentUser = health.user_id;
+  document.getElementById('status').textContent = health.model + ' · 9Router local · user: ' + health.user_id + ' · PID: ' + health.pid;
+}
+async function clearMemory() {
+  if (busy || !currentUser) return;
+  if (!confirm('Xóa toàn bộ trí nhớ dài hạn của user "' + currentUser + '"?\nLịch sử và bằng chứng cũ vẫn được giữ. Sau khi xóa sẽ mở session mới.')) return;
+  setBusy(true);
+  showError('');
+  try {
+    const result = await api('/api/memory/clear', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: currentUser}),
+    });
+    await refreshMemory();
+    const context = await api('/api/context');
+    document.getElementById('memory-context').textContent = context.context;
+    setBusy(false);
+    await newSession();
+    document.getElementById('maintenance-status').textContent = 'Đã xóa ' + result.deleted + ' mục trí nhớ của ' + result.user_id + '. Đã mở session mới; lịch sử và bằng chứng cũ vẫn được giữ.';
+  } catch (error) { showError(error.message); }
+  finally { setBusy(false); }
+}
+async function restartServer() {
+  if (busy) return;
+  setBusy(true);
+  showError('');
+  const notice = document.getElementById('maintenance-status');
+  try {
+    const result = await api('/api/server/restart', {method: 'POST'});
+    notice.textContent = 'Đang restart web · PID cũ: ' + result.previous_pid + ' · Giữ nguyên trí nhớ, lịch sử và bằng chứng.';
+    const deadline = Date.now() + 60000;
+    let health = null;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        const candidate = await api('/api/health', {signal: AbortSignal.timeout(2500)});
+        if (candidate.ok && candidate.pid !== result.previous_pid) { health = candidate; break; }
+      } catch (_) { /* Server tạm ngắt kết nối trong khi restart. */ }
+    }
+    if (!health) throw new Error('Web chưa khởi động lại sau 60 giây. Chạy run_web và xem data/service-logs/restart-helper.log.');
+    showHealth(health);
+    await refreshMemory();
+    const context = await api('/api/context');
+    document.getElementById('memory-context').textContent = context.context;
+    setBusy(false);
+    await newSession();
+    notice.textContent = 'Restart thành công · PID ' + result.previous_pid + ' → ' + health.pid + '. Đã mở session mới; trí nhớ, lịch sử và bằng chứng vẫn được giữ.';
+  } catch (error) { showError(error.message); }
+  finally { setBusy(false); }
+}
 function togglePhoto(){const on=document.body.classList.toggle('screenshot');document.getElementById('compare').open=on;}
 function renderTrace(t) {
   for (const id of ['trace-before','trace-after','trace-context']) document.getElementById(id).textContent = '';
@@ -121,9 +180,12 @@ async function boot() {
   try {
     const health = await api('/api/health');
     if (!health.ok) throw new Error(health.detail);
-    document.getElementById('status').textContent = health.model + ' · 9Router local · user: ' + health.user_id;
+    showHealth(health);
     const sessions = await api('/api/sessions');
-    if (sessions.length) {
+    const requestedSession = new URLSearchParams(location.search).get('session');
+    if (requestedSession) {
+      threadId = requestedSession;
+    } else if (sessions.length) {
       threadId = sessions[0].thread_id;
     } else {
       threadId = (await api('/api/sessions/new', { method: 'POST' })).thread_id;
@@ -184,6 +246,9 @@ function escapeHtml(text) {
 async function selectSession(id) {
   if(busy)return;
   threadId = id;
+  const url = new URL(location.href);
+  url.searchParams.set('session', id);
+  window.history.replaceState(null, '', url);
   document.getElementById('current').textContent = 'thread: ' + id;
   const chat = document.getElementById('chat');
   chat.innerHTML = '';
