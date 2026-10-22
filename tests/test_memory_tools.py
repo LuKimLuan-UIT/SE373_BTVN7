@@ -41,19 +41,24 @@ def test_recall_is_empty_at_start(tmp_path):
     assert "Chưa có" in recall.invoke({})
 
 
-def test_remember_warns_about_conflict(tmp_path):
-    """Mục mới gần giống mục cũ -> remember bị chặn, hướng dẫn dùng supersede."""
+def test_remember_auto_supersedes_conflict(tmp_path):
+    """Mục mới trùng chủ đề -> mục cũ bị supersede, mục mới ghi vào."""
     tools, manager = make_tools(tmp_path)
     remember = tools[0]
-    remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token"})
+    first = remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token"})
+    old_key = first.split("key=")[1].split(":")[0].strip()
+
     result = remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token mới"})
 
-    assert "CHƯA GHI ĐƯỢC" in result
+    assert "Đã ghi memory" in result
     assert "supersede" in result
-    assert len(manager.entries(topic="auth")) == 1  # không ghi thêm mục
+    assert manager.find(old_key).status == "superseded"
+
+    active = [e for e in manager.entries(topic="auth") if e.is_active]
+    assert len(active) == 1
 
 
-def test_remember_force_writes_both(tmp_path):
+def test_remember_force_keeps_both(tmp_path):
     tools, manager = make_tools(tmp_path)
     remember = tools[0]
     remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token"})
@@ -62,7 +67,7 @@ def test_remember_force_writes_both(tmp_path):
     )
 
     assert "Đã ghi memory" in result
-    assert len(manager.entries(topic="auth")) == 2
+    assert len([e for e in manager.entries(topic="auth") if e.is_active]) == 2
 
 
 def test_supersede_replaces_and_keeps_trace(tmp_path):

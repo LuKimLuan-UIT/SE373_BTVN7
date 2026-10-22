@@ -65,14 +65,6 @@ def make_key(topic: str, content: str) -> str:
     return f"fact-{digest}"
 
 
-class MemoryConflictError(Exception):
-    """Mục mới có thể thay thế mục cũ → không cho ghi thẳng, phải `supersede`."""
-
-    def __init__(self, conflicts: list["MemoryEntry"]) -> None:
-        self.conflicts = conflicts
-        super().__init__("Có thể xung đột với mục đang hiệu lực trong cùng topic.")
-
-
 class MemoryManager:
     """Lớp nghiệp vụ cho vòng đời memory, đặt trên store Markdown."""
 
@@ -130,20 +122,19 @@ class MemoryManager:
     ) -> dict[str, Any]:
         """Ghi một mục memory mới.
 
-        Nếu trong cùng topic đã có mục đang hiệu lực có nội dung gần giống, hàm này
-        **chặn** việc ghi và ném :class:`MemoryConflictError` — buộc agent phải quyết
-        định: dùng ``supersede`` (mục mới thay mục cũ) hoặc ``force=True`` (thật sự
-        cần giữ cả hai).
+        Nếu trong cùng topic đã có mục **đang hiệu lực** có nội dung gần giống, mục cũ
+        được **supersede trước** (đánh dấu ``superseded``, giữ nguồn + thời điểm),
+        sau đó mới ghi mục mới. Nhờ vậy không bao giờ có hai mục mâu thuẫn cùng hiệu lực.
 
         Args:
             topic: chủ đề của mục memory.
             content: nội dung mục memory.
-            source: nguồn (ví dụ ``session-1``) để truy vết.
-            supersedes: key của mục cũ bị thay thế.
-            force: bỏ qua kiểm tra xung đột (ghi kèm).
+            source: nguồn (mặc định là session hiện tại).
+            supersedes: key của mục cũ bị thay thế (ngoài các mục tự phát hiện).
+            force: giữ cả mục cũ và mục mới (khi thật sự là hai quyết định khác nhau).
 
         Returns:
-            dict với ``key``, ``topic``, ``conflicts``.
+            dict với ``key``, ``topic``, ``superseded`` (danh sách key bị thay thế).
         """
         content = content.strip()
         if not content:
@@ -152,13 +143,17 @@ class MemoryManager:
         key = make_key(topic, content)
         namespace = ("memory", self.user_id, topic)
 
-        conflicts = self.find_conflicts(topic, content, exclude_key=key)
-        if conflicts and not supersedes and not force:
-            raise MemoryConflictError(conflicts)
-
-        if supersedes:
+        # 1. supersede mục cũ trước (mục tự phát hiện trùng chủ đề + mục được chỉ định).
+        superseded: list[str] = []
+        if not force:
+            for conflict in self.find_conflicts(topic, content, exclude_key=key):
+                self._mark_superseded(conflict.key, new_key=key)
+                superseded.append(conflict.key)
+        if supersedes and supersedes not in superseded:
             self._mark_superseded(supersedes, new_key=key)
+            superseded.append(supersedes)
 
+        # 2. rồi mới ghi mục mới.
         self.store.put(
             namespace,
             key,
@@ -173,7 +168,7 @@ class MemoryManager:
         return {
             "key": key,
             "topic": topic,
-            "conflicts": [c.to_dict() for c in conflicts],
+            "superseded": superseded,
         }
 
     def find_conflicts(self, topic: str, content: str, *, exclude_key: str = "") -> list[MemoryEntry]:

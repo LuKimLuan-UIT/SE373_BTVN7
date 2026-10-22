@@ -74,16 +74,17 @@ Index luôn được nạp, chi tiết chỉ nạp khi cần → không nhồi t
 
 | Hành động | Tool | Kết quả |
 |---|---|---|
-| Ghi | `remember(topic, content)` | thêm mục mới. **Bị chặn** nếu trùng chủ đề với mục đang hiệu lực → phải `supersede` hoặc `force=true` |
+| Ghi | `remember(topic, content)` | thêm mục mới. Nếu trùng chủ đề với mục đang hiệu lực → **tự supersede mục cũ trước, rồi ghi mục mới** (`force=true` để giữ cả hai) |
 | Đọc | `recall(topic?)` | nạp chi tiết khi thật cần |
 | Sửa | `update(key, content)` | sửa nội dung, giữ nguyên `created_at` |
 | Thay thế | `supersede(key, content)` | mục cũ → `status: superseded` + `superseded_by` + `superseded_at` (giữ nguồn, thời điểm) |
 | Quên | `forget(key)` | xoá hẳn mục sai / lỗi thời |
 
 > **Chống memory mâu thuẫn:** `remember` tự so nội dung mới với các mục đang hiệu lực
-> trong cùng topic (trùng từ khóa). Nếu trùng → **không ghi**, mà trả về yêu cầu agent
-> chọn: `supersede` (mục mới thay mục cũ) hoặc `force=true` (hai quyết định thực sự khác nhau).
-> Nhờ vậy memory không bị "append mãi" thành nhiều mục mâu thuẫn.
+> trong cùng topic (trùng từ khóa). Nếu trùng → mục cũ được **supersede trước**
+> (đánh dấu `superseded`, giữ nguồn + thời điểm), rồi mới ghi mục mới.
+> Nhờ vậy không bao giờ có hai mục mâu thuẫn cùng hiệu lực, và không cần agent
+> gọi thêm tool. Dùng `force=true` khi thật sự là hai quyết định khác nhau.
 >
 > Mỗi mục ghi ra đều có `source` = session đã sinh ra nó, và `created_at` / `updated_at`.
 

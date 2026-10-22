@@ -24,10 +24,11 @@ LONG_TERM_PROMPT = """Bạn có bộ công cụ trí nhớ dài hạn (lưu tron
 Cách dùng đúng:
 - Người dùng nói ra quy ước/quy tắc quan trọng → chủ động `remember`.
 - Người dùng hỏi lại ("quy ước của dự án là gì?") → `recall` trước khi trả lời.
-- Nếu `remember` báo "CHƯA GHI ĐƯỢC ... có thể THAY THẾ mục cũ": đây là tín hiệu mục
-  mới thay thế mục cũ → gọi `supersede(key=<key cũ>, content=<nội dung mới>)`.
-  Chỉ dùng `force=true` khi chắc chắn hai mục là hai quyết định khác nhau.
-- Khi quy ước đổi, luôn `supersede` — đừng chỉ append (append sẽ tạo nhiều mục mâu thuẫn).
+- `remember` tự supersede mục cũ trùng chủ đề trước khi ghi (nên không bao giờ có hai
+  mục mâu thuẫn cùng hiệu lực). Chỉ dùng `force=true` khi chắc chắn là HAI quyết định
+  khác nhau — ví dụ user vừa "thích Python" vừa "thích Rust".
+- Khi quy ước đổi, luôn ghi bằng `remember` (hoặc `supersede` nếu biết rõ key cũ) —
+  đừng chỉ append.
 - Không lưu câu chào hỏi hay thông tin tức thời.
 - Không bịa key: key lấy từ kết quả `recall` hoặc từ thông báo của `remember`."""
 

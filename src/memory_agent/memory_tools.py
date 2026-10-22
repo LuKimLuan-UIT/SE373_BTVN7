@@ -10,7 +10,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from .memory.lifecycle import MemoryConflictError, MemoryManager
+from .memory.lifecycle import MemoryManager
 
 
 def _format_entries(entries: list[Any]) -> str:
@@ -30,36 +30,30 @@ def build_memory_tools(manager: MemoryManager) -> list:
     def remember(topic: str, content: str, supersedes: str | None = None, force: bool = False) -> str:
         """Ghi một mục memory mới vào một chủ đề (topic).
 
+        Nếu trong cùng topic đã có mục đang hiệu lực có nội dung gần giống, mục cũ
+        được supersede TRƯỚC (đánh dấu đã bị thay thế, vẫn giữ nguồn và thời điểm),
+        rồi mới ghi mục mới.
+
         Args:
-            topic: Chủ đề, ví dụ "preferences", "conventions", "project".
+            topic: Chủ đề, ví dụ "preferences", "project".
             content: Nội dung mục memory, tự chứa và đủ ngắn gọn.
-            supersedes: (tuỳ chọn) key của mục cũ bị thay thế bởi mục này.
-            force: (tuỳ chọn) ghi kèm khi biết chắc mục mới khác hẳn mục cũ.
+            supersedes: (tuỳ chọn) key của mục cũ bị thay thế.
+            force: (tuỳ chọn) ghi kèm, giữ cả mục cũ — dùng khi hai mục là hai
+                quyết định khác nhau.
         """
         try:
             result = manager.remember(
                 topic, content, supersedes=supersedes, force=force
             )
-        except MemoryConflictError as exc:
-            lines = [f"- (key={c.key}) {c.content}" for c in exc.conflicts]
-            return (
-                "CHƯA GHI ĐƯỢC: nội dung này có thể THAY THẾ mục đang hiệu lực trong "
-                f"topic '{topic}'. Hãy chọn 1 trong 2:\n"
-                "1) mục mới thay thế mục cũ → gọi tool `supersede(key=<key cũ>, content=<nội dung mới>)`\n"
-                "2) hai mục thực sự khác nhau → gọi lại `remember` với `force=true`\n"
-                "Các mục có thể xung đột:\n" + "\n".join(lines)
-            )
         except Exception as exc:  # noqa: BLE001 - báo lỗi cho model xử lý
             return f"Không ghi được memory: {exc}"
 
         message = f"Đã ghi memory [{result['topic']}] key={result['key']}: {content}"
-        conflicts = result.get("conflicts") or []
-        if conflicts and not supersedes:
-            lines = [f"- (key={c['key']}) {c['content']}" for c in conflicts]
+        superseded = result.get("superseded") or []
+        if superseded:
             message += (
-                "\n\nLƯU Ý: đã ghi kèm vì có mục gần giống trong cùng topic. "
-                "Nếu mục mới thực ra thay thế mục cũ, hãy dùng tool `supersede` để "
-                "đánh dấu mục cũ là superseded.\n" + "\n".join(lines)
+                "\n\nĐã supersede mục cũ (đánh dấu là superseded, vẫn truy vết được): "
+                + ", ".join(superseded)
             )
         return message
 
