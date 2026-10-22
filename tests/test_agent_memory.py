@@ -54,10 +54,7 @@ def make_settings(tmp_path) -> Settings:
         sessions_dir=str(tmp_path / "sessions"),
         agents_path=str(tmp_path / "AGENTS.md"),
         enable_long_term_memory=True,
-        enable_summarization=False,
         memory_placement="system",
-        summarize_trigger_messages=12,
-        summarize_keep_messages=6,
         model_call_limit=8,
     )
 

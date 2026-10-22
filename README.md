@@ -22,7 +22,6 @@ Mục tiêu của bài học:
 |---|---|---|---|---|
 | **Tầng 1 — Trí nhớ trong session** | `data/sessions/<id>.md` | ✅ | 1 session = 1 hội thoại | luôn bật |
 | **Tầng 2 — Trí nhớ dài hạn** | `data/memory/<user>/MEMORY.md` + `<topic>.md` | ✅ | xuyên mọi session của 1 user | `MEMORY_LONG_TERM=1` |
-| **Tầng 3 — Quản lý context** | `SummarizationMiddleware` | — | gọn lịch sử khi session dài | `MEMORY_SUMMARIZATION=1` |
 
 ```
         user ──► ┌──────────────────────────┐
@@ -198,10 +197,8 @@ OPENAI_BASE_URL=                         # bỏ trống nếu dùng OpenAI mặc
 Tuỳ chọn (để thử từng tầng):
 
 ```dotenv
-MEMORY_LONG_TERM=1            # tầng 2
-MEMORY_SUMMARIZATION=1        # tầng 3
-MEMORY_SUMMARY_TRIGGER=12     # tóm tắt khi lịch sử vượt 12 tin nhắn
-MEMORY_SUMMARY_KEEP=6         # giữ lại 6 tin nhắn gần nhất
+MEMORY_LONG_TERM=1            # bật memory dài hạn (tool + index)
+MEMORY_PLACEMENT=end           # đặt index memory ở cuối hội thoại (giữ prompt cache)
 USER_ID=default-user          # mỗi user một thư mục memory riêng
 ```
 
@@ -299,5 +296,6 @@ Kiểm tra: (1) `MEMORY_LONG_TERM` đang bật, (2) agent có thật sự gọi 
 **Sau khi restart app, hội thoại cũ mất.**
 Kiểm tra `data/sessions/<id>.md` còn tồn tại (agent nạp lại lịch sử từ file này mỗi lượt).
 
-**Lịch sử dài làm agent chậm / lỗi context.**
-Bật `MEMORY_SUMMARIZATION=1`, giảm `MEMORY_SUMMARY_TRIGGER`.
+**Lịch sử dài làm context phình to.**
+Bài lab không bật compaction (tóm tắt lịch sử) — cố ý, để tập trung vào memory dài hạn.
+Nếu session thật sự dài, hãy xem lại slide "Memory curation" của lớp để cân nhắc thêm.

@@ -77,7 +77,6 @@ def injected_context(settings: Settings, manager: MemoryManager | None) -> str:
     at_end = settings.memory_placement == "end"
     return build_context(
         long_term_memory=settings.enable_long_term_memory and manager is not None,
-        summarization=settings.enable_summarization,
         agents_text=read_agents_file(settings.agents_path),
         memory_index="" if at_end else (manager.index_text() if manager else ""),
     )

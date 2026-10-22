@@ -1,10 +1,10 @@
-"""Cấu hình runtime: đọc `.env` và các bậc/tính năng của bài lab.
+"""Cấu hình runtime: đọc `.env` và các tính năng của bài lab.
 
-Bài lab chia làm 3 bậc, bật/tắt bằng biến môi trường trong `.env`:
+Bài lab tập trung vào **memory dài hạn** (vài quyết định của người dùng, sống qua
+nhiều session):
 
 - Bậc 1 (luôn bật): lịch sử session lưu file Markdown -> nhớ được sau khi restart app.
 - Bậc 2 (``MEMORY_LONG_TERM=1``): memory Markdown -> nhớ được quy ước giữa nhiều session.
-- Bậc 3 (``MEMORY_SUMMARIZATION=1``): tóm tắt lịch sử -> session dài không làm vỡ context window.
 """
 
 from __future__ import annotations
@@ -35,15 +35,10 @@ class Settings:
 
     # Các bậc tính năng của lab.
     enable_long_term_memory: bool
-    enable_summarization: bool
 
     # Vị trí đặt memory index: "system" (cuối system prompt) hoặc "end" (cuối hội thoại).
     # "end" giữ được prompt cache cho toàn bộ hội thoại (xem README mục prompt caching).
     memory_placement: str
-
-    # Ngưỡng tóm tắt lịch sử (số tin nhắn) và số tin nhắn giữ lại sau khi tóm tắt.
-    summarize_trigger_messages: int
-    summarize_keep_messages: int
 
     # Giới hạn số lần gọi model trong một lượt chat.
     model_call_limit: int
@@ -102,10 +97,7 @@ def load_settings() -> tuple[Settings | None, list[str]]:
             sessions_dir=str(paths.SESSIONS_DIR),
             agents_path=str(paths.AGENTS_PATH),
             enable_long_term_memory=_flag("MEMORY_LONG_TERM", default=True),
-            enable_summarization=_flag("MEMORY_SUMMARIZATION", default=True),
             memory_placement=os.getenv("MEMORY_PLACEMENT", "system").strip().lower() or "system",
-            summarize_trigger_messages=_int("MEMORY_SUMMARY_TRIGGER", 12),
-            summarize_keep_messages=_int("MEMORY_SUMMARY_KEEP", 6),
             model_call_limit=_int("MODEL_CALL_LIMIT", 8),
         ),
         [],

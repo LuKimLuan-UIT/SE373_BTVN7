@@ -43,27 +43,15 @@ def read_agents_file(path: str | Path) -> str:
     return file.read_text(encoding="utf-8")
 
 
-def build_middleware(settings: Settings, model: ChatOpenAI) -> list:
-    """Danh sách middleware, theo đúng thứ tự áp dụng.
+def build_middleware(settings: Settings) -> list:
+    """Danh sách middleware.
 
-    - ``SummarizationMiddleware`` phải chạy TRƯỚC ``ModelCallLimitMiddleware``
-      trong danh sách để lịch sử được gọn trước khi đếm số lần gọi model.
+    Chỉ cần chặn vòng lặp model vô hạn; không có compaction (tóm tắt lịch sử)
+    vì bài lab tập trung vào memory dài hạn.
     """
-    middleware: list = []
-    if settings.enable_summarization:
-        from langchain.agents.middleware import SummarizationMiddleware
-
-        middleware.append(
-            SummarizationMiddleware(
-                model=model,
-                trigger=("messages", settings.summarize_trigger_messages),
-                keep=("messages", settings.summarize_keep_messages),
-            )
-        )
-    middleware.append(
+    return [
         ModelCallLimitMiddleware(run_limit=settings.model_call_limit, exit_behavior="end")
-    )
-    return middleware
+    ]
 
 
 def build_agent(
@@ -92,7 +80,6 @@ def build_agent(
         index = manager.index_text() if use_memory and manager and not at_end else ""
         return build_context(
             long_term_memory=use_memory,
-            summarization=settings.enable_summarization,
             agents_text=agents_text,
             memory_index=index,
         )
@@ -114,7 +101,7 @@ def build_agent(
 
         middleware.append(inject_memory_digest)
 
-    middleware.extend(build_middleware(settings, model))
+    middleware.extend(build_middleware(settings))
 
     return create_agent(
         model=model,

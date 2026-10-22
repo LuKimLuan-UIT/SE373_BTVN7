@@ -29,16 +29,14 @@ Cách dùng đúng:
 - Không lưu câu chào hỏi hay thông tin tức thời.
 - Không bịa key: key lấy từ kết quả `recall`."""
 
-SUMMARIZATION_PROMPT = """Lịch sử hội thoại đã được tóm tắt. Hãy dựa vào phần tóm tắt và các tin nhắn gần đây để trả lời."""
 
 
-def build_system_prompt(*, long_term_memory: bool, summarization: bool) -> str:
+
+def build_system_prompt(*, long_term_memory: bool) -> str:
     """Ghép prompt theo các tính năng đang bật."""
     parts = [BASE_PROMPT]
     if long_term_memory:
         parts.append(LONG_TERM_PROMPT)
-    if summarization:
-        parts.append(SUMMARIZATION_PROMPT)
     return "\n\n".join(parts)
 
 
@@ -54,7 +52,6 @@ def build_memory_digest(memory_index: str) -> str:
 def build_context(
     *,
     long_term_memory: bool,
-    summarization: bool,
     agents_text: str = "",
     memory_index: str = "",
 ) -> str:
@@ -63,7 +60,7 @@ def build_context(
     - ``AGENTS.md``  : quy ước project — luôn nạp.
     - ``MEMORY.md`` : index ngắn của memory — luôn nạp (chi tiết nạp khi `recall`).
     """
-    parts = [build_system_prompt(long_term_memory=long_term_memory, summarization=summarization)]
+    parts = [build_system_prompt(long_term_memory=long_term_memory)]
 
     if agents_text.strip():
         parts.append("# Quy ước của project (AGENTS.md)\n\n" + agents_text.strip())
