@@ -196,6 +196,18 @@ uv sync                                   # tạo .venv và cài dependency
 cp .env.example .env                     # Windows: copy .env.example .env
 ```
 
+Hoặc dùng `pip` với Python >=3.11, tại thư mục `memory_agent`:
+
+```bash
+python -m pip install -r requirements.txt
+python -m pip install --no-deps -e .
+```
+
+`requirements.txt` cố định phiên bản các thư viện trực tiếp và công cụ kiểm thử
+theo môi trường SE373 đã kiểm chứng; các phụ thuộc gián tiếp do pip giải quyết.
+Sau đó chạy web bằng `python -m uvicorn memory_agent.ui.app:app --host 127.0.0.1 --port 8000`
+và kiểm thử bằng `python -m pytest -q`. Router và `.env` vẫn cần cấu hình riêng.
+
 Điền `.env`:
 
 ```dotenv

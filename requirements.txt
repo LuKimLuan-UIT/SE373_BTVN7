@@ -1,0 +1,12 @@
+# Python >=3.11 for installing the project (see pyproject.toml).
+# Versions of the direct dependencies used in the tested SE373 environment.
+# Run from this directory: python -m pip install -r requirements.txt
+langchain==1.4.2
+langchain-openai==1.7.2
+langgraph==1.2.12
+fastapi==0.159.1
+uvicorn==0.54.0
+python-dotenv==1.2.3
+pydantic==2.13.5
+httpx==0.28.1
+pytest==9.1.1
