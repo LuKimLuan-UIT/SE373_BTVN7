@@ -10,7 +10,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from .memory.lifecycle import MemoryManager
+from .memory.lifecycle import MemoryConflictError, MemoryManager
 
 
 def _format_entries(entries: list[Any]) -> str:
@@ -27,29 +27,39 @@ def build_memory_tools(manager: MemoryManager) -> list:
     """Trả về bộ tool trí nhớ dài hạn đã bind ``manager``."""
 
     @tool
-    def remember(topic: str, content: str, supersedes: str | None = None) -> str:
+    def remember(topic: str, content: str, supersedes: str | None = None, force: bool = False) -> str:
         """Ghi một mục memory mới vào một chủ đề (topic).
 
         Args:
             topic: Chủ đề, ví dụ "preferences", "conventions", "project".
             content: Nội dung mục memory, tự chứa và đủ ngắn gọn.
             supersedes: (tuỳ chọn) key của mục cũ bị thay thế bởi mục này.
+            force: (tuỳ chọn) ghi kèm khi biết chắc mục mới khác hẳn mục cũ.
         """
         try:
-            result = manager.remember(topic, content, supersedes=supersedes)
+            result = manager.remember(
+                topic, content, supersedes=supersedes, force=force
+            )
+        except MemoryConflictError as exc:
+            lines = [f"- (key={c.key}) {c.content}" for c in exc.conflicts]
+            return (
+                "CHƯA GHI ĐƯỢC: nội dung này có thể THAY THẾ mục đang hiệu lực trong "
+                f"topic '{topic}'. Hãy chọn 1 trong 2:\n"
+                "1) mục mới thay thế mục cũ → gọi tool `supersede(key=<key cũ>, content=<nội dung mới>)`\n"
+                "2) hai mục thực sự khác nhau → gọi lại `remember` với `force=true`\n"
+                "Các mục có thể xung đột:\n" + "\n".join(lines)
+            )
         except Exception as exc:  # noqa: BLE001 - báo lỗi cho model xử lý
             return f"Không ghi được memory: {exc}"
 
         message = f"Đã ghi memory [{result['topic']}] key={result['key']}: {content}"
         conflicts = result.get("conflicts") or []
         if conflicts and not supersedes:
-            lines = [
-                f"- (key={c['key']}) {c['content']}" for c in conflicts
-            ]
+            lines = [f"- (key={c['key']}) {c['content']}" for c in conflicts]
             message += (
-                "\n\nCẢNH BÁO xung đột: các mục sau có thể đã lỗi thời. "
-                "Nếu mục mới thay thế mục cũ, hãy gọi lại remember với supersedes=<key> "
-                "hoặc dùng tool supersede.\n" + "\n".join(lines)
+                "\n\nLƯU Ý: đã ghi kèm vì có mục gần giống trong cùng topic. "
+                "Nếu mục mới thực ra thay thế mục cũ, hãy dùng tool `supersede` để "
+                "đánh dấu mục cũ là superseded.\n" + "\n".join(lines)
             )
         return message
 

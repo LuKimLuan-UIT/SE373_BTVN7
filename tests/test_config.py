@@ -46,6 +46,34 @@ def test_filling_key_after_start_is_picked_up(tmp_path, monkeypatch):
     assert settings.api_key == "sk-test"
 
 
+def test_os_env_wins_over_file(tmp_path, monkeypatch):
+    """Biến môi trường của OS phải thắng giá trị trong `.env`."""
+    monkeypatch.setattr(paths, "ENV_PATH", write_env(tmp_path, "OPENAI_API_KEY=sk-file\nMODEL_NAME=m\n"))
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-os")
+
+    settings, _ = config.load_settings()
+    assert settings.api_key == "sk-os"
+
+
+def test_os_env_wins_for_user_id(tmp_path, monkeypatch):
+    """Đổi USER_ID bằng biến môi trường phải có hiệu lực (tách thư mục memory)."""
+    monkeypatch.setattr(
+        paths, "ENV_PATH", write_env(tmp_path, "OPENAI_API_KEY=k\nMODEL_NAME=m\nUSER_ID=default-user\n")
+    )
+    monkeypatch.setenv("USER_ID", "demo-supersede")
+
+    settings, _ = config.load_settings()
+    assert settings.user_id == "demo-supersede"
+
+
+def test_file_used_when_os_env_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(paths, "ENV_PATH", write_env(tmp_path, "OPENAI_API_KEY=sk-file\nMODEL_NAME=m\n"))
+    monkeypatch.setenv("OPENAI_API_KEY", "")  # rỗng -> lấy từ file
+
+    settings, _ = config.load_settings()
+    assert settings.api_key == "sk-file"
+
+
 def test_flags_and_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(
         paths,

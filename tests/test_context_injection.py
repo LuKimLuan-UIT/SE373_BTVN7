@@ -46,7 +46,8 @@ def test_index_is_short_and_details_not_injected(tmp_path):
     store = MarkdownMemoryStore(settings.memory_dir, settings.user_id)
     manager = MemoryManager(store, settings.user_id)
     for i in range(40):
-        manager.remember("preferences", f"An thích thứ {i} trong lập trình")
+        # force=True: cố ý ghi nhiều mục gần giống để kiểm tra index bị giới hạn dòng.
+        manager.remember("preferences", f"An thích thứ {i} trong lập trình", force=True)
 
     context = injected_context(settings, manager)
 

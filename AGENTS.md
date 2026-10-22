@@ -18,6 +18,9 @@
 - Khi người dùng nói ra một quy ước/quy tắc quan trọng: ghi bằng `remember`.
 - Khi có thông tin mới **thay thế** thông tin cũ: dùng `supersede` (đánh dấu mục cũ
   là `superseded`, giữ lại nguồn và thời điểm) — không xoá lịch sử, không chỉ append.
+- `remember` sẽ **bị chặn** nếu mục mới trùng chủ đề với một mục đang hiệu lực.
+  Khi đó: dùng `supersede` nếu mục mới thay mục cũ; chỉ dùng `force=true` khi chắc chắn
+  là hai quyết định khác nhau.
 - Khi thông tin sai hoặc không còn đúng: dùng `forget`.
 - Không ghi những thứ chỉ là câu chào hỏi hoặc thông tin tức thời.
 

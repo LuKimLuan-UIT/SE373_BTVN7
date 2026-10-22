@@ -42,12 +42,27 @@ def test_recall_is_empty_at_start(tmp_path):
 
 
 def test_remember_warns_about_conflict(tmp_path):
-    tools, _ = make_tools(tmp_path)
+    """Mục mới gần giống mục cũ -> remember bị chặn, hướng dẫn dùng supersede."""
+    tools, manager = make_tools(tmp_path)
     remember = tools[0]
     remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token"})
     result = remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token mới"})
 
-    assert "CẢNH BÁO xung đột" in result
+    assert "CHƯA GHI ĐƯỢC" in result
+    assert "supersede" in result
+    assert len(manager.entries(topic="auth")) == 1  # không ghi thêm mục
+
+
+def test_remember_force_writes_both(tmp_path):
+    tools, manager = make_tools(tmp_path)
+    remember = tools[0]
+    remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token"})
+    result = remember.invoke(
+        {"topic": "auth", "content": "Authentication sử dụng JWT token mới", "force": True}
+    )
+
+    assert "Đã ghi memory" in result
+    assert len(manager.entries(topic="auth")) == 2
 
 
 def test_supersede_replaces_and_keeps_trace(tmp_path):

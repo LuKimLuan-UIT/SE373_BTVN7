@@ -14,7 +14,7 @@ Quy tắc chung:
 - Khi người dùng hỏi về thông tin đã lưu ở phiên trước, hãy dùng tool `recall` thay vì đoán."""
 
 LONG_TERM_PROMPT = """Bạn có bộ công cụ trí nhớ dài hạn (lưu trong file Markdown):
-- `remember(topic, content, supersedes?)`: ghi một mục vào chủ đề (vd: "preferences", "conventions").
+- `remember(topic, content, supersedes?, force?)`: ghi một mục vào chủ đề (vd: "preferences", "project").
 - `recall(topic?)`: đọc chi tiết các mục đã lưu. Chỉ gọi khi thật cần — index đã nạp sẵn.
 - `update(key, content)`: sửa nội dung một mục đã có.
 - `supersede(key, content)`: thay thế mục cũ (quy ước đã đổi) — mục cũ được đánh dấu
@@ -24,10 +24,12 @@ LONG_TERM_PROMPT = """Bạn có bộ công cụ trí nhớ dài hạn (lưu tron
 Cách dùng đúng:
 - Người dùng nói ra quy ước/quy tắc quan trọng → chủ động `remember`.
 - Người dùng hỏi lại ("quy ước của dự án là gì?") → `recall` trước khi trả lời.
-- Khi `remember` báo CẢNH BÁO xung đột: nếu mục mới thay thế mục cũ thì dùng
-  `supersede` (hoặc `remember` với `supersedes=<key>`), đừng chỉ append.
+- Nếu `remember` báo "CHƯA GHI ĐƯỢC ... có thể THAY THẾ mục cũ": đây là tín hiệu mục
+  mới thay thế mục cũ → gọi `supersede(key=<key cũ>, content=<nội dung mới>)`.
+  Chỉ dùng `force=true` khi chắc chắn hai mục là hai quyết định khác nhau.
+- Khi quy ước đổi, luôn `supersede` — đừng chỉ append (append sẽ tạo nhiều mục mâu thuẫn).
 - Không lưu câu chào hỏi hay thông tin tức thời.
-- Không bịa key: key lấy từ kết quả `recall`."""
+- Không bịa key: key lấy từ kết quả `recall` hoặc từ thông báo của `remember`."""
 
 
 

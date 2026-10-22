@@ -12,9 +12,23 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 from . import paths
+
+
+def _env(name: str, default: str = "") -> str:
+    """Lấy giá trị biến: ưu tiên biến môi trường của OS, sau đó tới `.env`.
+
+    Dùng ``dotenv_values`` (không ghi vào ``os.environ``) để:
+    - không bị "dính" giá trị rỗng từ lần đọc `.env` trước (lỗi của ``load_dotenv``);
+    - sửa `.env`` là có hiệu lực ngay, không cần restart server.
+    """
+    from_os = os.getenv(name, "").strip()
+    if from_os:
+        return from_os
+    from_file = (dotenv_values(paths.ENV_PATH).get(name) or "").strip()
+    return from_file or default
 
 
 @dataclass(frozen=True)
@@ -45,14 +59,14 @@ class Settings:
 
 
 def _flag(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name, "").strip().lower()
+    raw = _env(name).lower()
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on"}
 
 
 def _int(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
+    raw = _env(name)
     if not raw:
         return default
     try:
@@ -62,18 +76,13 @@ def _int(name: str, default: int) -> int:
 
 
 def load_settings() -> tuple[Settings | None, list[str]]:
-    """Đọc `.env`. Trả về ``(settings, [])`` khi đủ cấu hình, ngược lại ``(None, [biến thiếu])``.
+    """Đọc cấu hình. Trả về ``(settings, [])`` khi đủ, ngược lại ``(None, [biến thiếu])``.
 
-    ``override=True``: giá trị trong `.env` luôn thắng biến môi trường đã có.
-    Nếu không, lúc `.env` còn trống thì ``OPENAI_API_KEY`` bị set thành ``""``
-    trong ``os.environ`` và mọi lần đọc sau đều thấy giá trị rỗng -> app báo
-    thiếu cấu hình dù đã điền key.
+    Thứ tự ưu tiên: biến môi trường của OS > `.env`.
     """
-    load_dotenv(paths.ENV_PATH, override=True)
-
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    model_name = os.getenv("MODEL_NAME", "").strip()
-    base_url = os.getenv("OPENAI_BASE_URL", "").strip() or None
+    api_key = _env("OPENAI_API_KEY")
+    model_name = _env("MODEL_NAME")
+    base_url = _env("OPENAI_BASE_URL") or None
 
     missing = [
         name
@@ -92,12 +101,12 @@ def load_settings() -> tuple[Settings | None, list[str]]:
             api_key=api_key,
             model_name=model_name,
             base_url=base_url,
-            user_id=os.getenv("USER_ID", "default-user").strip() or "default-user",
+            user_id=_env("USER_ID") or "default-user",
             memory_dir=str(paths.MEMORY_DIR),
             sessions_dir=str(paths.SESSIONS_DIR),
             agents_path=str(paths.AGENTS_PATH),
             enable_long_term_memory=_flag("MEMORY_LONG_TERM", default=True),
-            memory_placement=os.getenv("MEMORY_PLACEMENT", "system").strip().lower() or "system",
+            memory_placement=_env("MEMORY_PLACEMENT").lower() or "system",
             model_call_limit=_int("MODEL_CALL_LIMIT", 8),
         ),
         [],

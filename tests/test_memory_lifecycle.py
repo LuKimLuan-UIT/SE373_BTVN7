@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from memory_agent.memory.lifecycle import MemoryManager
+from memory_agent.memory.lifecycle import MemoryConflictError, MemoryManager
 from memory_agent.memory.store import MarkdownMemoryStore
+
+import pytest
 
 
 def make_manager(tmp_path, user_id="u1"):
@@ -62,13 +64,35 @@ def test_index_only_shows_current_convention(tmp_path):
     assert "JWT" not in index
 
 
-def test_conflict_is_detected(tmp_path):
-    """Ghi mục mới gần giống mục cũ -> phải cảnh báo xung đột."""
+def test_conflict_blocks_plain_remember(tmp_path):
+    """Ghi mục mới gần giống mục cũ -> bị chặn, phải chọn supersede hoặc force."""
     manager = make_manager(tmp_path)
     manager.remember("auth", "Authentication sử dụng JWT token")
 
-    result = manager.remember("auth", "Authentication sử dụng JWT token mới")
-    assert result["conflicts"], "phải phát hiện xung đột với mục cũ"
+    with pytest.raises(MemoryConflictError) as exc:
+        manager.remember("auth", "Authentication sử dụng JWT token mới")
+
+    assert exc.value.conflicts
+    assert len(manager.entries(topic="auth")) == 1  # không ghi thêm mục nào
+
+
+def test_force_allows_writing_both(tmp_path):
+    manager = make_manager(tmp_path)
+    manager.remember("auth", "Authentication sử dụng JWT token")
+
+    manager.remember("auth", "Authentication sử dụng JWT token mới", force=True)
+
+    assert len(manager.entries(topic="auth")) == 2
+
+
+def test_supersede_bypasses_conflict_check(tmp_path):
+    manager = make_manager(tmp_path)
+    old_key = manager.remember("auth", "Authentication sử dụng JWT token")["key"]
+
+    result = manager.supersede(old_key, "Authentication sử dụng JWT token mới")
+
+    assert manager.find(old_key).status == "superseded"
+    assert manager.find(result["key"]).is_active
 
 
 def test_forget_removes_entry(tmp_path):

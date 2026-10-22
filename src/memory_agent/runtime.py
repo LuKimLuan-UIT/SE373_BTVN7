@@ -34,6 +34,9 @@ class Runtime:
         """
         from langchain_core.messages import HumanMessage
 
+        # Ghi nhớ nguồn của mục memory là session hiện tại.
+        self.manager.current_source = thread_id
+
         history = load_history(self.settings.sessions_dir, thread_id)
         result = self.agent.invoke(
             {"messages": [*history, HumanMessage(content=message)]},

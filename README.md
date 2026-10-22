@@ -74,11 +74,18 @@ Index luôn được nạp, chi tiết chỉ nạp khi cần → không nhồi t
 
 | Hành động | Tool | Kết quả |
 |---|---|---|
-| Ghi | `remember(topic, content)` | thêm mục mới; nếu trùng chủ đề → **cảnh báo xung đột** |
+| Ghi | `remember(topic, content)` | thêm mục mới. **Bị chặn** nếu trùng chủ đề với mục đang hiệu lực → phải `supersede` hoặc `force=true` |
 | Đọc | `recall(topic?)` | nạp chi tiết khi thật cần |
 | Sửa | `update(key, content)` | sửa nội dung, giữ nguyên `created_at` |
 | Thay thế | `supersede(key, content)` | mục cũ → `status: superseded` + `superseded_by` + `superseded_at` (giữ nguồn, thời điểm) |
 | Quên | `forget(key)` | xoá hẳn mục sai / lỗi thời |
+
+> **Chống memory mâu thuẫn:** `remember` tự so nội dung mới với các mục đang hiệu lực
+> trong cùng topic (trùng từ khóa). Nếu trùng → **không ghi**, mà trả về yêu cầu agent
+> chọn: `supersede` (mục mới thay mục cũ) hoặc `force=true` (hai quyết định thực sự khác nhau).
+> Nhờ vậy memory không bị "append mãi" thành nhiều mục mâu thuẫn.
+>
+> Mỗi mục ghi ra đều có `source` = session đã sinh ra nó, và `created_at` / `updated_at`.
 
 ### Xử lý memory lỗi thời (ví dụ trong slide)
 
