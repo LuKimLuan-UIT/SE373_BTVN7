@@ -558,37 +558,6 @@ wheels = [
 ]
 
 [[package]]
-name = "langgraph-memory-lab"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "fastapi" },
-    { name = "langchain" },
-    { name = "langchain-openai" },
-    { name = "langgraph" },
-    { name = "python-dotenv" },
-    { name = "uvicorn" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "langchain", specifier = ">=1.0" },
-    { name = "langchain-openai", specifier = ">=1.0" },
-    { name = "langgraph", specifier = ">=1.0" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "uvicorn", specifier = ">=0.30" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.0" }]
-
-[[package]]
 name = "langgraph-prebuilt"
 version = "1.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -641,6 +610,37 @@ sdist = { url = "https://files.pythonhosted.org/packages/f8/c3/a9a98d7adf573fdd5
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e2/1d/b683b3d8777e625e021efeaaf72dc04f709be59e6a5f2d65725cebaedcfb/langsmith-0.14.11-py3-none-any.whl", hash = "sha256:9ecca7633df228ef2c44563f7187e426b8a79e7c5c2351c5dd8c9074c61512e7", size = 869018, upload-time = "2026-10-16T07:16:54.634Z" },
 ]
+
+[[package]]
+name = "memory-agent"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "fastapi" },
+    { name = "langchain" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
+    { name = "python-dotenv" },
+    { name = "uvicorn" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "langchain", specifier = ">=1.0" },
+    { name = "langchain-openai", specifier = ">=1.0" },
+    { name = "langgraph", specifier = ">=1.0" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "uvicorn", specifier = ">=0.30" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0" }]
 
 [[package]]
 name = "openai"

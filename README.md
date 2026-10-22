@@ -146,7 +146,7 @@ Lưu ý thực tế:
 ## 3. Cấu trúc thư mục
 
 ```
-langgraph-memory-lab/
+memory_agent/
 ├── AGENTS.md                 # quy ước project (luôn nạp vào context)
 ├── pyproject.toml            # dependency + cấu hình pytest
 ├── .env.example              # OPENAI_API_KEY, MODEL_NAME, ...
@@ -182,7 +182,7 @@ Nguyên tắc tổ chức: **mỗi module một trách nhiệm** — đổi nơi
 Yêu cầu: Python 3.11+, [uv](https://docs.astral.sh/uv/).
 
 ```bash
-cd langgraph-memory-lab
+cd memory_agent
 uv sync                                   # tạo .venv và cài dependency
 cp .env.example .env                     # Windows: copy .env.example .env
 ```

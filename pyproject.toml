@@ -1,5 +1,5 @@
 [project]
-name = "langgraph-memory-lab"
+name = "memory-agent"
 version = "0.1.0"
 description = "Chatbot LangGraph với trí nhớ persistent nhiều session (memory Markdown)"
 readme = "README.md"
