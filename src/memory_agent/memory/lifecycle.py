@@ -220,7 +220,8 @@ class MemoryManager:
         entry = self.find(key)
         if entry is None:
             raise KeyError(f"Không tìm thấy mục memory: {key}")
-        result = self.remember(entry.topic, content, source=source or entry.source, supersedes=key)
+        result = self.remember(entry.topic, content, source=source or self.current_source or entry.source,
+                               supersedes=key, force=True)
         return result
 
     def forget(self, key: str) -> bool:

@@ -1,0 +1,34 @@
+{
+  "step": 1,
+  "model": "cx/gpt-6-luna",
+  "thread_id": "natural-s1",
+  "pid": 33892,
+  "tools": [
+    "remember"
+  ],
+  "checks": {
+    "model_invoked": true,
+    "fresh_session": true,
+    "wrote_memory": true,
+    "jwt_stored": true
+  },
+  "passed": true,
+  "reply": "Đã ghi vào memory chủ đề `project`: cơ chế đăng nhập của dự án là JWT.",
+  "elapsed_seconds": 3.98,
+  "usage": [
+    {
+      "input_tokens": 1740,
+      "output_tokens": 45,
+      "total_tokens": 1785,
+      "input_token_details": {},
+      "output_token_details": {}
+    },
+    {
+      "input_tokens": 1910,
+      "output_tokens": 24,
+      "total_tokens": 1934,
+      "input_token_details": {},
+      "output_token_details": {}
+    }
+  ]
+}

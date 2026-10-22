@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from datetime import datetime, timezone
+from time import perf_counter
 
 from .config import Settings
 from .graph import build_agent, build_model, read_agents_file
@@ -15,6 +17,7 @@ from .memory.lifecycle import MemoryManager
 from .memory.store import MarkdownMemoryStore
 from .prompts import build_context
 from .sessions import rename_session
+from .tracing import PromptRecorder, save_trace
 
 
 @dataclass
@@ -32,7 +35,16 @@ class Runtime:
         Lịch sử được nạp lại từ file Markdown của session (nên nhớ được sau khi
         restart app), rồi lưu lại sau khi trả lời.
         """
+        return self.chat_with_trace(thread_id, message)["reply"]
+
+    def chat_with_trace(self, thread_id: str, message: str) -> dict[str, Any]:
+        """Chat thật và lưu bằng chứng tool/context của riêng lượt hiện tại."""
         from langchain_core.messages import HumanMessage
+
+        started = perf_counter()
+        recorder = PromptRecorder()
+        before = self.manager.index_text()
+        entries_before = [entry.to_dict() for entry in self.manager.entries()]
 
         # Ghi nhớ nguồn của mục memory là session hiện tại.
         self.manager.current_source = thread_id
@@ -40,7 +52,7 @@ class Runtime:
         history = load_history(self.settings.sessions_dir, thread_id)
         result = self.agent.invoke(
             {"messages": [*history, HumanMessage(content=message)]},
-            config={"configurable": {"thread_id": thread_id}},
+            config={"configurable": {"thread_id": thread_id}, "callbacks": [recorder]},
         )
         answer = result["messages"][-1].content
 
@@ -48,7 +60,30 @@ class Runtime:
         title = str(title)[:40]
         write_history(self.settings.sessions_dir, thread_id, result["messages"], title=title)
         rename_session(self.settings.sessions_dir, thread_id, title)
-        return answer
+        events = []
+        for item in result["messages"][len(history) + 1:]:
+            for call in getattr(item, "tool_calls", []):
+                events.append({"kind": "call", "name": call["name"],
+                               "id": call["id"], "args": call["args"]})
+            if item.type == "tool":
+                events.append({"kind": "result", "name": item.name,
+                               "id": item.tool_call_id, "content": item.content})
+        trace = {
+            "thread_id": thread_id, "question": message, "reply": answer,
+            "model": self.settings.model_name,
+            "at": datetime.now(timezone.utc).isoformat(),
+            "elapsed_seconds": round(perf_counter() - started, 2),
+            "history_messages": len(history), "events": events,
+            "memory_before": before, "memory_after": self.manager.index_text(),
+            "entries": [entry.to_dict() for entry in self.manager.entries()],
+            "entries_before": entries_before,
+            "prompts": recorder.prompts, "usage": recorder.usage,
+        }
+        trace["memory_changed"] = entries_before != trace["entries"]
+        trace["write_proposed"] = any(e["kind"] == "call" and e["name"] in
+                                      {"remember", "update", "supersede", "forget"} for e in events)
+        save_trace(self.settings.sessions_dir, thread_id, trace)
+        return {"reply": answer, "trace": trace}
 
     def history(self, thread_id: str) -> list[dict[str, str]]:
         """Lịch sử session (để hiển thị)."""

@@ -22,14 +22,20 @@ LONG_TERM_PROMPT = """Bạn có bộ công cụ trí nhớ dài hạn (lưu tron
 - `forget(key)`: quên hẳn một mục sai/lỗi thời.
 
 Cách dùng đúng:
-- Người dùng nói ra quy ước/quy tắc quan trọng → chủ động `remember`.
+- Hiểu ý nghĩa hội thoại để đề xuất memory bền vững: quyết định đã thống nhất,
+  quy ước dự án, sở thích ổn định. Không cần người dùng nói "nhớ" hay "lưu".
+- Phân biệt sự kiện đã chốt với giả định, câu hỏi, trích dẫn và đề xuất đang cân nhắc.
+  Nếu chưa rõ quyết định đã được chấp thuận, hỏi lại thay vì ghi như sự thật.
 - Người dùng hỏi lại ("quy ước của dự án là gì?") → `recall` trước khi trả lời.
-- `remember` tự supersede mục cũ trùng chủ đề trước khi ghi (nên không bao giờ có hai
-  mục mâu thuẫn cùng hiệu lực). Chỉ dùng `force=true` khi chắc chắn là HAI quyết định
-  khác nhau — ví dụ user vừa "thích Python" vừa "thích Rust".
-- Khi quy ước đổi, luôn ghi bằng `remember` (hoặc `supersede` nếu biết rõ key cũ) —
-  đừng chỉ append.
+- Model đề xuất thao tác; harness kiểm tra dữ liệu, namespace, key và trạng thái.
+  Harness không suy ngữ nghĩa bằng từ khóa và không bảo đảm model luôn hiểu đúng.
+- Trước khi ghi, đối chiếu index/recall. Khi quy ước đổi, dùng `supersede(key, content)`
+  hoặc `remember(..., supersedes=key)` để chỉ rõ quyết định bị thay thế.
+  Không tự ghi thêm mục mâu thuẫn; cùng topic có thể chứa nhiều quyết định độc lập.
+- Nội dung ngắn gọn, tự chứa, chỉ mô tả quy ước hiện hành; tránh lặp thông tin cũ.
 - Không lưu câu chào hỏi hay thông tin tức thời.
+- Không lưu mật khẩu, API key hoặc credential. Yêu cầu lưu rõ ràng của người dùng
+  phải được xem xét theo cùng chính sách, không tự động coi mọi yêu cầu là hợp lệ.
 - Không bịa key: key lấy từ kết quả `recall` hoặc từ thông báo của `remember`."""
 
 

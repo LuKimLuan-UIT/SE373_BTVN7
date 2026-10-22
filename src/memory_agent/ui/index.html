@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8" />
-<title>LangGraph Memory Lab</title>
+<title>Memory Chat · SE373</title>
 <style>
   :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e6e8ee; --muted:#8b93a7; --accent:#4f8cff; }
   * { box-sizing: border-box; }
@@ -32,11 +32,24 @@
   .msg.user { align-self:flex-end; background:var(--accent); color:#fff; }
   .msg.bot { align-self:flex-start; background:var(--panel); border:1px solid var(--line); }
   #composer { display:flex; gap:10px; padding:14px; border-top:1px solid var(--line); }
-  input[type=text] { flex:1; background:var(--panel); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:10px 12px; font-size:14px; }
+  input[type=text],textarea { flex:1; min-width:0; background:var(--panel); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:10px 12px; font-family:inherit;font-size:14px;resize:vertical; }
   .err { color:#ff8080; padding:0 18px 10px; font-size:13px; }
+</style>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+ :root{--bg:#f3f5fa;--panel:#fff;--line:#dce2ed;--text:#17223a;--muted:#647087;--accent:#315bd9}
+ body{height:auto;min-height:100vh;display:grid;grid-template-columns:205px minmax(320px,1fr) minmax(360px,440px);gap:16px;padding:20px;font-size:14px;align-items:start}
+ aside,main,.evidence{width:auto;background:white;border:1px solid var(--line);border-radius:12px;overflow:hidden}aside{min-height:420px}main{min-height:520px}header{padding:18px}h1{font-size:20px}h2{font-size:16px;margin:0}h3{font-size:13px;margin:14px 0 8px}.muted{font-size:12px}.session.active{background:#eef2ff;color:var(--accent)}.session:hover{background:#f2f5fc}.session{margin-bottom:6px;padding:12px 8px}.session .del{display:none}
+ #demo{grid-column:1/-1}.eyebrow{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:1.4px}.demo-title{display:flex;justify-content:space-between;align-items:center}.demo-title h1{font-size:26px;margin:5px 0}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}.step{text-align:left;background:white;color:var(--text);border:1px solid var(--line);padding:13px;font-size:14px;line-height:1.6}.step span{display:block;color:var(--muted);font-size:12px}.step.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}button:disabled{opacity:.5;cursor:wait}.msg{max-width:100%;padding:14px;font-size:15px;line-height:1.6}.msg.user{background:#edf2ff;color:var(--text);border:1px solid #d6e0ff;align-self:stretch}.msg.bot{border-left:3px solid #15764e;align-self:stretch}.msg:before{display:block;font-size:10px;letter-spacing:1px;font-weight:700;color:var(--muted);margin-bottom:6px}.msg.user:before{content:'NGƯỜI DÙNG'}.msg.bot:before{content:'TRỢ LÝ'}#chat{min-height:250px;max-height:620px}#sessions{max-height:500px}input[type=text]{background:#f8f9fc;color:var(--text)}
+ .evidence{padding:18px}.flow{display:flex;gap:5px;font-size:11px;color:var(--muted);margin:12px 0}.flow span{background:#f3f5fa;padding:4px 6px;border-radius:5px}.tool-event{border:1px solid #cce5d8;background:#f6fcf8;border-radius:9px;margin:10px 0;padding:11px}.tool-event strong{color:#15764e}.tool-event pre{font:12px/1.5 Consolas,monospace;margin:7px 0;white-space:pre-wrap;overflow-wrap:anywhere}.tool-result{font-size:12px;border-top:1px solid #d8e9df;padding-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}.fact{border:1px solid var(--line);border-radius:9px;padding:11px;margin:9px 0}.fact.old{background:#faf7f0}.fact small{display:block;font-size:11px;color:var(--muted);overflow-wrap:anywhere}.tag{font-size:10px;font-weight:700;color:#15764e}.old .tag{color:#946119}details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}summary{cursor:pointer;color:var(--accent);font-size:12px;font-weight:600}.codeblock{font:11px/1.5 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f7fa;padding:10px;border-radius:6px;max-height:300px;overflow:auto}#memory{max-height:none;padding:14px 0 0;margin-top:12px}#memory pre{background:#f6f7fa;color:var(--muted)}.tabs button.active{color:var(--accent)}#memory-list{padding:0!important;list-style:none}.err{color:#a72c3c}.screenshot #composer,.screenshot aside{display:none}.screenshot{grid-template-columns:minmax(320px,1fr) minmax(360px,1fr)}.screenshot #demo{grid-column:1/-1}.screenshot #chat{max-height:none}.screenshot .demo-hint{display:none}
+ @media(max-width:1050px){body{grid-template-columns:180px 1fr}.evidence{grid-column:1/-1}.steps{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){body,.screenshot{display:block;padding:10px}aside,main,.evidence{margin-top:12px}.steps{gap:6px}.demo-title{align-items:start}}
+</style>
+<style>
+body{grid-template-columns:205px minmax(320px,1fr);max-width:1600px;margin:auto}.steps{display:none}.evidence{display:none}body.show-evidence{grid-template-columns:190px minmax(320px,1fr) minmax(360px,480px)}body.show-evidence .evidence,body.screenshot .evidence{display:block}body.screenshot{grid-template-columns:minmax(320px,1fr) minmax(360px,1fr)}#chat{min-height:420px}#input{width:100%}.decision{margin:12px 0;padding:10px 12px;border-radius:8px;background:#edf2ff;font-size:13px;color:var(--text)}#compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}#compare-grid h3{margin-top:6px}.demo-title .controls{display:flex;gap:8px}.session{display:block;overflow-wrap:anywhere}.screenshot #chat{min-height:200px}.screenshot #memory-slot{display:none}@media(max-width:1050px){body.show-evidence{grid-template-columns:180px 1fr}body.show-evidence .evidence{grid-column:1/-1}}@media(max-width:650px){body,body.show-evidence,body.screenshot{display:block}.demo-title .controls{flex-direction:column}.demo-title h1{font-size:22px}#compare-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<section id="demo"><div class="demo-title"><div><div class="eyebrow">SE373 · TRỢ LÝ CÓ TRÍ NHỚ</div><h1>Trò chuyện cùng dự án</h1><div class="muted demo-hint">Nhắn tin tự nhiên. Trợ lý đề xuất điều đáng nhớ; harness kiểm tra trước khi ghi.</div></div><div class="controls"><button class="ghost" onclick="document.body.classList.toggle('show-evidence')">Bằng chứng</button><button class="ghost" onclick="togglePhoto()">Chế độ chụp ảnh</button></div></div><div class="steps" id="steps"></div></section>
 <aside>
   <div class="pad">
     <button style="width:100%" onclick="newSession()">+ Session mới</button>
@@ -57,7 +70,7 @@
 <main>
   <header>
     <div>
-      <h1>LangGraph Persistent Memory Lab</h1>
+      <h1>Cuộc trò chuyện</h1>
       <div class="muted" id="status">Đang kết nối…</div>
     </div>
     <div class="muted" id="current"></div>
@@ -65,13 +78,31 @@
   <div id="chat"></div>
   <div id="error" class="err"></div>
   <div id="composer">
-    <input type="text" id="input" placeholder="Nhập tin nhắn… (thử: “Tôi tên là An, tôi thích Python”)" onkeydown="if(event.key==='Enter') send()" />
+    <textarea id="input" rows="2" aria-label="Tin nhắn" placeholder="Nhắn tin… Enter để gửi, Shift+Enter để xuống dòng" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}"></textarea>
     <button onclick="send()">Gửi</button>
   </div>
 </main>
+<section class="evidence"><h2>Bằng chứng của lượt chat</h2><div class="flow"><span>Yêu cầu</span>→<span>Model đề xuất</span>→<span>Harness kiểm tra</span>→<span>Markdown</span></div><div id="trace-decision" class="decision">Chưa có lượt chạy.</div><details id="compare"><summary>Memory trước / sau · các mục hiệu lực</summary><div id="compare-grid"><div><h3>Trước lượt chat</h3><pre class="codeblock" id="trace-before"></pre></div><div><h3>Sau lượt chat</h3><pre class="codeblock" id="trace-after"></pre></div></div></details><div id="trace-tools" class="muted">Chưa có lượt chạy trong phiên này.</div><h3>Chi tiết memory sau lượt chat</h3><div id="trace-facts"></div><details><summary>Context thực tế gửi tới model</summary><pre class="codeblock" id="trace-context"></pre></details><details><summary>Memory hiện tại của ứng dụng (khác snapshot từng bước)</summary><div id="memory-slot"></div></details></section>
 
 <script>
 let threadId = null;
+let busy = false;
+function togglePhoto(){const on=document.body.classList.toggle('screenshot');document.getElementById('compare').open=on;}
+function renderTrace(t) {
+  for (const id of ['trace-before','trace-after','trace-context']) document.getElementById(id).textContent = '';
+  document.getElementById('trace-facts').innerHTML = '';
+  if (!t) { document.getElementById('trace-tools').textContent = 'Nhập tin nhắn và bấm Gửi để xem tool thực tế.';document.getElementById('trace-decision').textContent='Phiên mới · chưa có lượt chạy.'; return; }
+  const calls=t.events.filter(e=>e.kind==='call');
+  const proposed=t.write_proposed??calls.some(c=>['remember','update','supersede','forget'].includes(c.name));
+  const changed=t.memory_changed??(t.memory_before!==t.memory_after);
+  document.getElementById('trace-decision').textContent=(proposed?'Agent có đề xuất thao tác ghi. ':'Agent không đề xuất ghi. ')+(changed?'Memory đã thay đổi sau khi tool thực hiện.':'Memory không thay đổi trong lượt này.');
+  document.getElementById('trace-tools').innerHTML = `<div>${escapeHtml(t.model)} · ${t.elapsed_seconds} giây · Đã nạp ${t.history_messages} message lịch sử</div>` + (calls.length ? calls.map((c,i)=>{const r=t.events.find(e=>e.kind==='result'&&e.id===c.id);return `<div class="tool-event"><strong>${i+1}. Tool ${escapeHtml(c.name)}</strong><pre>${escapeHtml(JSON.stringify(c.args,null,2))}</pre><div class="tool-result">${escapeHtml(r?r.content:'Chưa có kết quả tool.')}</div></div>`}).join('') : '<p>Model không gọi tool trong lượt này.</p>');
+  document.getElementById('trace-facts').innerHTML=t.entries.map(e=>`<div class="fact ${e.status==='active'?'':'old'}"><div class="tag">${e.status==='active'?'● ĐANG HIỆU LỰC':'◷ ĐÃ THAY THẾ'}</div><div>${escapeHtml(e.content)}</div><small>Topic: ${escapeHtml(e.topic)} · Nguồn: ${escapeHtml(e.source||'—')}</small><small>Key: ${escapeHtml(e.key)}${e.superseded_by?' → '+escapeHtml(e.superseded_by):''}</small></div>`).join('') || '<div class="muted">Chưa có memory.</div>';
+  const compact=s=>s.split('\n').filter(l=>l.startsWith('- [')).join('\n')||'Chưa có mục hiệu lực.';
+  document.getElementById('trace-before').textContent=compact(t.memory_before);
+  document.getElementById('trace-after').textContent=compact(t.memory_after);
+  document.getElementById('trace-context').textContent=t.prompts.map((p,i)=>`LẦN GỌI MODEL ${i+1}\n`+p.map(m=>`[${m.role}]\n${typeof m.content==='string'?m.content:JSON.stringify(m.content)}`).join('\n\n')).join('\n\n────────\n\n');
+}
 
 async function api(path, options) {
   const res = await fetch(path, options);
@@ -90,7 +121,7 @@ async function boot() {
   try {
     const health = await api('/api/health');
     if (!health.ok) throw new Error(health.detail);
-    document.getElementById('status').textContent = 'Sẵn sàng · user: ' + health.user_id;
+    document.getElementById('status').textContent = health.model + ' · 9Router local · user: ' + health.user_id;
     const sessions = await api('/api/sessions');
     if (sessions.length) {
       threadId = sessions[0].thread_id;
@@ -112,7 +143,7 @@ async function refreshSessions() {
   for (const s of sessions) {
     const div = document.createElement('div');
     div.className = 'session' + (s.thread_id === threadId ? ' active' : '');
-    div.innerHTML = `<span>${escapeHtml(s.title)}</span><span class="del" title="xoá">🗑</span>`;
+    div.innerHTML = `<span>${escapeHtml(s.title)}<small class="muted" style="display:block">${escapeHtml(s.thread_id)}</small></span><span class="del" title="xoá">🗑</span>`;
     div.querySelector('span').onclick = () => selectSession(s.thread_id);
     div.querySelector('.del').onclick = (e) => { e.stopPropagation(); removeSession(s.thread_id); };
     box.appendChild(div);
@@ -147,10 +178,11 @@ function showTab(tab) {
 }
 
 function escapeHtml(text) {
-  return (text || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 async function selectSession(id) {
+  if(busy)return;
   threadId = id;
   document.getElementById('current').textContent = 'thread: ' + id;
   const chat = document.getElementById('chat');
@@ -163,9 +195,11 @@ async function selectSession(id) {
     chat.appendChild(div);
   }
   await refreshSessions();
+  renderTrace(await api('/api/trace/' + encodeURIComponent(id)));
 }
 
 async function newSession() {
+  if(busy)return;
   threadId = (await api('/api/sessions/new', { method: 'POST' })).thread_id;
   await selectSession(threadId);
 }
@@ -178,7 +212,9 @@ async function removeSession(id) {
 async function send() {
   const input = document.getElementById('input');
   const text = input.value.trim();
-  if (!text || !threadId) return;
+  if (!text || !threadId || busy) return;
+  busy=true;
+  document.querySelectorAll('button,input,textarea').forEach(b=>b.disabled=true);
   input.value = '';
   showError('');
   const chat = document.getElementById('chat');
@@ -196,14 +232,19 @@ async function send() {
     bot.className = 'msg bot';
     bot.textContent = data.reply;
     chat.appendChild(bot);
+    renderTrace(data.trace);
     chat.scrollTop = chat.scrollHeight;
     await refreshSessions();
     await refreshMemory();
   } catch (e) {
     showError(e.message);
+  } finally {
+    busy=false;
+    document.querySelectorAll('button,input,textarea').forEach(b=>b.disabled=false);
   }
 }
 
+document.getElementById('memory-slot').appendChild(document.getElementById('memory'));
 boot();
 </script>
 </body>

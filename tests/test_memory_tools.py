@@ -41,14 +41,14 @@ def test_recall_is_empty_at_start(tmp_path):
     assert "Chưa có" in recall.invoke({})
 
 
-def test_remember_auto_supersedes_conflict(tmp_path):
-    """Mục mới trùng chủ đề -> mục cũ bị supersede, mục mới ghi vào."""
+def test_remember_supersedes_explicit_model_proposal(tmp_path):
+    """Model chỉ rõ mục cũ; harness xác thực rồi thay thế."""
     tools, manager = make_tools(tmp_path)
     remember = tools[0]
     first = remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token"})
     old_key = first.split("key=")[1].split(":")[0].strip()
 
-    result = remember.invoke({"topic": "auth", "content": "Authentication sử dụng JWT token mới"})
+    result = remember.invoke({"topic": "auth", "content": "Chuyển sang cookie", "supersedes": old_key})
 
     assert "Đã ghi memory" in result
     assert "supersede" in result

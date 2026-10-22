@@ -1,0 +1,38 @@
+{
+  "step": 4,
+  "model": "cx/gpt-6-luna",
+  "thread_id": "challenge-a-s4",
+  "pid": 16160,
+  "tools": [
+    "recall"
+  ],
+  "checks": {
+    "model_invoked": true,
+    "fresh_session": true,
+    "recalled": true,
+    "cookie_answer": true,
+    "cookie_in_initial_context": true,
+    "old_jwt_replaced_by_active_cookie": true,
+    "old_keys_absent_from_index": true
+  },
+  "passed": true,
+  "reply": "Quy ước hiện hành: đăng nhập dùng **session cookie** thay cho JWT. Mục cũ quy định dùng **JWT** đã bị thay thế.",
+  "elapsed_seconds": 5.98,
+  "usage": [
+    {
+      "input_tokens": 1599,
+      "output_tokens": 18,
+      "total_tokens": 1617,
+      "input_token_details": {},
+      "output_token_details": {}
+    },
+    {
+      "input_tokens": 1706,
+      "output_tokens": 37,
+      "total_tokens": 1743,
+      "input_token_details": {},
+      "output_token_details": {}
+    }
+  ],
+  "validation_note": "Kiểm tra theo key/status/liên kết superseded_by; câu 'cookie thay JWT' vẫn có thể nhắc JWT. Không gọi lại model."
+}

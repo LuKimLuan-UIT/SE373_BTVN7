@@ -1,0 +1,88 @@
+{
+  "thread_id": "challenge-a-s1",
+  "question": "Quy ước dự án: Authentication sử dụng JWT. Hãy ghi nhớ cho các phiên sau.",
+  "reply": "Đã ghi nhớ quy ước dự án: Authentication sử dụng JWT.",
+  "model": "cx/gpt-6-luna",
+  "at": "2026-10-22T07:22:55.131744+00:00",
+  "elapsed_seconds": 3.52,
+  "history_messages": 0,
+  "events": [
+    {
+      "kind": "call",
+      "name": "remember",
+      "id": "call_60dede13d7ee4827a7f2fd6d52fe32ef",
+      "args": {
+        "topic": "project",
+        "content": "Quy ước dự án: Authentication sử dụng JWT.",
+        "supersedes": null,
+        "force": false
+      }
+    },
+    {
+      "kind": "result",
+      "name": "remember",
+      "id": "call_60dede13d7ee4827a7f2fd6d52fe32ef",
+      "content": "Đã ghi memory [project] key=fact-b972089d: Quy ước dự án: Authentication sử dụng JWT."
+    }
+  ],
+  "memory_before": "# Memory index — challenge-a-live-20261022\n\n> Index ngắn: luôn nạp vào context. Chi tiết nằm ở file theo chủ đề, chỉ nạp khi agent gọi `recall(topic)`.\n\n_Chưa có memory nào._\n",
+  "memory_after": "# Memory index — challenge-a-live-20261022\n\n> Index ngắn: luôn nạp vào context. Chi tiết nằm ở file theo chủ đề, chỉ nạp khi agent gọi `recall(topic)`.\n\n| Topic | Số mục hiệu lực | File |\n|---|---|---|\n| project | 1 | [project.md](project.md) |\n\n## Mục đang hiệu lực\n\n- [project] Quy ước dự án: Authentication sử dụng JWT. (`fact-b972089d`)\n",
+  "entries": [
+    {
+      "key": "fact-b972089d",
+      "topic": "project",
+      "content": "Quy ước dự án: Authentication sử dụng JWT.",
+      "source": "challenge-a-s1",
+      "status": "active",
+      "created_at": "",
+      "updated_at": "",
+      "superseded_by": ""
+    }
+  ],
+  "prompts": [
+    [
+      {
+        "role": "system",
+        "content": "Bạn là trợ lý trong lab \"LangGraph Persistent Memory\". Trả lời bằng tiếng Việt, ngắn gọn, rõ ràng.\n\nQuy tắc chung:\n- Chỉ nói bạn đã ghi/đọc/xoá memory khi đã gọi tool tương ứng và nhận kết quả thành công.\n- Khi tool báo lỗi, nói rõ lỗi cho người dùng, không bịa kết quả.\n- Khi người dùng hỏi về thông tin đã lưu ở phiên trước, hãy dùng tool `recall` thay vì đoán.\n\nBạn có bộ công cụ trí nhớ dài hạn (lưu trong file Markdown):\n- `remember(topic, content, supersedes?, force?)`: ghi một mục vào chủ đề (vd: \"preferences\", \"project\").\n- `recall(topic?)`: đọc chi tiết các mục đã lưu. Chỉ gọi khi thật cần — index đã nạp sẵn.\n- `update(key, content)`: sửa nội dung một mục đã có.\n- `supersede(key, content)`: thay thế mục cũ (quy ước đã đổi) — mục cũ được đánh dấu\n  `superseded` nhưng vẫn giữ nguồn và thời điểm.\n- `forget(key)`: quên hẳn một mục sai/lỗi thời.\n\nCách dùng đúng:\n- Người dùng nói ra quy ước/quy tắc quan trọng → chủ động `remember`.\n- Người dùng hỏi lại (\"quy ước của dự án là gì?\") → `recall` trước khi trả lời.\n- `remember` tự supersede mục cũ trùng chủ đề trước khi ghi (nên không bao giờ có hai\n  mục mâu thuẫn cùng hiệu lực). Chỉ dùng `force=true` khi chắc chắn là HAI quyết định\n  khác nhau — ví dụ user vừa \"thích Python\" vừa \"thích Rust\".\n- Khi quy ước đổi, luôn ghi bằng `remember` (hoặc `supersede` nếu biết rõ key cũ) —\n  đừng chỉ append.\n- Không lưu câu chào hỏi hay thông tin tức thời.\n- Không bịa key: key lấy từ kết quả `recall` hoặc từ thông báo của `remember`.\n\n# Quy ước của project (AGENTS.md)\n\n# AGENTS.md — quy ước của project\n\n> File này luôn được nạp vào context của agent, giống `AGENTS.md` của Claude Code.\n> Agent phải tuân thủ các quy ước dưới đây.\n\n## Quy tắc bắt buộc\n\n- Trả lời bằng tiếng Việt, ngắn gọn và rõ ràng.\n- Chỉ khẳng định đã ghi/đọc/xoá memory khi tool trả về thành công.\n- Khi tool báo lỗi, nói rõ lỗi và đề xuất cách xử lý; không bịa kết quả.\n- Không hard-code model hay credential — đọc từ `config.py`/`.env`.\n\n## Quy ước về memory\n\n- Memory nằm ở `data/memory/<user_id>/`:\n  - `MEMORY.md` — index ngắn, luôn nạp vào context.\n  - `<topic>.md` — chi tiết theo chủ đề, chỉ nạp khi thật cần (`recall`).\n- Khi người dùng nói ra một quy ước/quy tắc quan trọng: ghi bằng `remember`.\n- Khi có thông tin mới **thay thế** thông tin cũ: dùng `supersede` (đánh dấu mục cũ\n  là `superseded`, giữ lại nguồn và thời điểm) — không xoá lịch sử, không chỉ append.\n- `remember` tự so trùng chủ đề: nếu mục mới thay thế mục cũ, mục cũ được supersede\n  trước rồi mới ghi mục mới. Dùng `force=true` khi chắc chắn là hai quyết định khác nhau.\n- Khi thông tin sai hoặc không còn đúng: dùng `forget`.\n- Không ghi những thứ chỉ là câu chào hỏi hoặc thông tin tức thời.\n\n## Quy ước về code\n\n- Mỗi module một trách nhiệm; không import chéo giữa các tầng.\n- Test chạy được không cần API key (dùng fake chat model).\n- Thêm bài tập mới vào `README.md` mục \"Bài tập\".\n\n# Index memory (MEMORY.md)\n\nĐây là index ngắn. Chi tiết từng mục nằm ở file theo chủ đề — khi cần chi tiết, gọi tool `recall`.\n\n# Memory index — challenge-a-live-20261022\n\n> Index ngắn: luôn nạp vào context. Chi tiết nằm ở file theo chủ đề, chỉ nạp khi agent gọi `recall(topic)`.\n\n_Chưa có memory nào._"
+      },
+      {
+        "role": "human",
+        "content": "Quy ước dự án: Authentication sử dụng JWT. Hãy ghi nhớ cho các phiên sau."
+      }
+    ],
+    [
+      {
+        "role": "system",
+        "content": "Bạn là trợ lý trong lab \"LangGraph Persistent Memory\". Trả lời bằng tiếng Việt, ngắn gọn, rõ ràng.\n\nQuy tắc chung:\n- Chỉ nói bạn đã ghi/đọc/xoá memory khi đã gọi tool tương ứng và nhận kết quả thành công.\n- Khi tool báo lỗi, nói rõ lỗi cho người dùng, không bịa kết quả.\n- Khi người dùng hỏi về thông tin đã lưu ở phiên trước, hãy dùng tool `recall` thay vì đoán.\n\nBạn có bộ công cụ trí nhớ dài hạn (lưu trong file Markdown):\n- `remember(topic, content, supersedes?, force?)`: ghi một mục vào chủ đề (vd: \"preferences\", \"project\").\n- `recall(topic?)`: đọc chi tiết các mục đã lưu. Chỉ gọi khi thật cần — index đã nạp sẵn.\n- `update(key, content)`: sửa nội dung một mục đã có.\n- `supersede(key, content)`: thay thế mục cũ (quy ước đã đổi) — mục cũ được đánh dấu\n  `superseded` nhưng vẫn giữ nguồn và thời điểm.\n- `forget(key)`: quên hẳn một mục sai/lỗi thời.\n\nCách dùng đúng:\n- Người dùng nói ra quy ước/quy tắc quan trọng → chủ động `remember`.\n- Người dùng hỏi lại (\"quy ước của dự án là gì?\") → `recall` trước khi trả lời.\n- `remember` tự supersede mục cũ trùng chủ đề trước khi ghi (nên không bao giờ có hai\n  mục mâu thuẫn cùng hiệu lực). Chỉ dùng `force=true` khi chắc chắn là HAI quyết định\n  khác nhau — ví dụ user vừa \"thích Python\" vừa \"thích Rust\".\n- Khi quy ước đổi, luôn ghi bằng `remember` (hoặc `supersede` nếu biết rõ key cũ) —\n  đừng chỉ append.\n- Không lưu câu chào hỏi hay thông tin tức thời.\n- Không bịa key: key lấy từ kết quả `recall` hoặc từ thông báo của `remember`.\n\n# Quy ước của project (AGENTS.md)\n\n# AGENTS.md — quy ước của project\n\n> File này luôn được nạp vào context của agent, giống `AGENTS.md` của Claude Code.\n> Agent phải tuân thủ các quy ước dưới đây.\n\n## Quy tắc bắt buộc\n\n- Trả lời bằng tiếng Việt, ngắn gọn và rõ ràng.\n- Chỉ khẳng định đã ghi/đọc/xoá memory khi tool trả về thành công.\n- Khi tool báo lỗi, nói rõ lỗi và đề xuất cách xử lý; không bịa kết quả.\n- Không hard-code model hay credential — đọc từ `config.py`/`.env`.\n\n## Quy ước về memory\n\n- Memory nằm ở `data/memory/<user_id>/`:\n  - `MEMORY.md` — index ngắn, luôn nạp vào context.\n  - `<topic>.md` — chi tiết theo chủ đề, chỉ nạp khi thật cần (`recall`).\n- Khi người dùng nói ra một quy ước/quy tắc quan trọng: ghi bằng `remember`.\n- Khi có thông tin mới **thay thế** thông tin cũ: dùng `supersede` (đánh dấu mục cũ\n  là `superseded`, giữ lại nguồn và thời điểm) — không xoá lịch sử, không chỉ append.\n- `remember` tự so trùng chủ đề: nếu mục mới thay thế mục cũ, mục cũ được supersede\n  trước rồi mới ghi mục mới. Dùng `force=true` khi chắc chắn là hai quyết định khác nhau.\n- Khi thông tin sai hoặc không còn đúng: dùng `forget`.\n- Không ghi những thứ chỉ là câu chào hỏi hoặc thông tin tức thời.\n\n## Quy ước về code\n\n- Mỗi module một trách nhiệm; không import chéo giữa các tầng.\n- Test chạy được không cần API key (dùng fake chat model).\n- Thêm bài tập mới vào `README.md` mục \"Bài tập\".\n\n# Index memory (MEMORY.md)\n\nĐây là index ngắn. Chi tiết từng mục nằm ở file theo chủ đề — khi cần chi tiết, gọi tool `recall`.\n\n# Memory index — challenge-a-live-20261022\n\n> Index ngắn: luôn nạp vào context. Chi tiết nằm ở file theo chủ đề, chỉ nạp khi agent gọi `recall(topic)`.\n\n| Topic | Số mục hiệu lực | File |\n|---|---|---|\n| project | 1 | [project.md](project.md) |\n\n## Mục đang hiệu lực\n\n- [project] Quy ước dự án: Authentication sử dụng JWT. (`fact-b972089d`)"
+      },
+      {
+        "role": "human",
+        "content": "Quy ước dự án: Authentication sử dụng JWT. Hãy ghi nhớ cho các phiên sau."
+      },
+      {
+        "role": "ai",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "Đã ghi memory [project] key=fact-b972089d: Quy ước dự án: Authentication sử dụng JWT."
+      }
+    ]
+  ],
+  "usage": [
+    {
+      "input_tokens": 1527,
+      "output_tokens": 43,
+      "total_tokens": 1570,
+      "input_token_details": {},
+      "output_token_details": {}
+    },
+    {
+      "input_tokens": 1661,
+      "output_tokens": 19,
+      "total_tokens": 1680,
+      "input_token_details": {},
+      "output_token_details": {}
+    }
+  ]
+}

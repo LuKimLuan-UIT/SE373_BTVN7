@@ -74,17 +74,19 @@ Index luôn được nạp, chi tiết chỉ nạp khi cần → không nhồi t
 
 | Hành động | Tool | Kết quả |
 |---|---|---|
-| Ghi | `remember(topic, content)` | thêm mục mới. Nếu trùng chủ đề với mục đang hiệu lực → **tự supersede mục cũ trước, rồi ghi mục mới** (`force=true` để giữ cả hai) |
+| Ghi | `remember(topic, content, supersedes?)` | model đề xuất mục đáng nhớ; harness kiểm tra nội dung/topic/key rồi ghi. Thay thế phải chỉ rõ key cũ |
 | Đọc | `recall(topic?)` | nạp chi tiết khi thật cần |
 | Sửa | `update(key, content)` | sửa nội dung, giữ nguyên `created_at` |
 | Thay thế | `supersede(key, content)` | mục cũ → `status: superseded` + `superseded_by` + `superseded_at` (giữ nguồn, thời điểm) |
 | Quên | `forget(key)` | xoá hẳn mục sai / lỗi thời |
 
-> **Chống memory mâu thuẫn:** `remember` tự so nội dung mới với các mục đang hiệu lực
-> trong cùng topic (trùng từ khóa). Nếu trùng → mục cũ được **supersede trước**
-> (đánh dấu `superseded`, giữ nguồn + thời điểm), rồi mới ghi mục mới.
-> Nhờ vậy không bao giờ có hai mục mâu thuẫn cùng hiệu lực, và không cần agent
-> gọi thêm tool. Dùng `force=true` khi thật sự là hai quyết định khác nhau.
+> **Model đề xuất, harness kiểm tra:** agent nhận diện quyết định bền vững theo
+> ngữ nghĩa, kể cả khi không có từ "lưu/nhớ". Agent đối chiếu index/recall và chỉ
+> rõ key cần thay thế. Tool kiểm tra topic, nội dung không rỗng, key thuộc user và
+> còn active; không tự thay thế dựa trên từ khóa. Đây không phải bộ đánh giá ngữ
+> nghĩa độc lập: chất lượng chọn memory vẫn phụ thuộc model. API `MemoryManager`
+> gọi trực tiếp còn giữ heuristic cũ cho các test/lab so sánh, không dùng trong
+> đường ghi memory của tool dành cho agent.
 >
 > Mỗi mục ghi ra đều có `source` = session đã sinh ra nó, và `created_at` / `updated_at`.
 
@@ -222,7 +224,61 @@ Mở http://localhost:8000 — sidebar trái là danh sách session (bấm để
 Panel **🧠 Memory** có 3 tab: `Index` (MEMORY.md), `Chi tiết` (từng mục + trạng thái),
 `Context` (in ra đúng phần context đang inject vào model).
 
-### Terminal
+### Chạy với 9Router global và Miniconda SE373 (Windows)
+
+9Router được cài bằng Node/npm toàn cục, chạy độc lập với Conda. Dự án gọi
+9Router qua HTTP từ Python của `SE373`:
+
+```text
+Memory Agent (Python SE373) -> http://127.0.0.1:20128/v1 -> OpenCode Free
+```
+
+Trong `.env`, dùng API key riêng do dashboard 9Router tạo (không dùng key upstream):
+
+```dotenv
+OPENAI_BASE_URL=http://127.0.0.1:20128/v1
+OPENAI_API_KEY=<API key trong dashboard 9Router>
+MODEL_NAME=oc/glm-5.3-flash-free
+```
+
+Model này đã trả `OK` qua 9Router khi kiểm tra ngày 22/10/2026. Danh sách model
+miễn phí và khả năng phục vụ có thể thay đổi. Không cần đăng nhập OpenCode Free.
+
+Trong Miniconda Prompt, từ thư mục `BTVN7` hoặc `memory_agent`, khởi động cả hai
+dịch vụ chạy nền bằng một lệnh (không cần kích hoạt Conda thủ công):
+
+```bat
+run_web
+```
+
+Nếu dùng PowerShell, nhập `.\run_web.cmd`.
+Launcher dùng Python của môi trường `SE373` và dùng lại dịch vụ 9Router nếu đang
+chạy. Nếu không tìm thấy 9Router đã cài, script tự cài bản 0.5.104 vào
+`data/local-router/` của dự án (lần đầu cần mạng), rồi khởi động dịch vụ.
+Có thể đổi cổng bằng `run_web -AppPort 8001`.
+
+Hoặc từ thư mục `memory_agent`, chạy trực tiếp script PowerShell:
+
+```powershell
+.\scripts\start_local.ps1
+```
+
+Script dùng Node global và Python tại `%USERPROFILE%\miniconda3\envs\SE373`,
+chỉ bind localhost. Dashboard: http://127.0.0.1:20128/dashboard; ứng dụng chat:
+http://127.0.0.1:8000. Log nằm trong `data/service-logs/` đã gitignore.
+Không tự thiết lập chạy cùng Windows. Thoát 9Router qua biểu tượng system tray.
+
+Để dùng CLI sau khi router đã chạy:
+
+```powershell
+conda activate SE373
+python scripts/demo_cli.py chat --thread demo-router "Xin chào"
+```
+
+`SE373` hiện dùng Python 3.10.21; test từ source đã chạy được, nhưng metadata
+package yêu cầu >=3.11 nên `pip install -e .` vẫn đòi Python >=3.11.
+
+### Demo CLI
 
 ```bash
 uv run python scripts/demo_cli.py chat --thread s1 "Dự án này dùng JWT để đăng nhập"
@@ -285,6 +341,17 @@ uv run python scripts/demo_cli.py context
 - **Khi quy ước đổi:** `supersede` thay vì append (xem mục 2).
 
 ### Bài tập mở rộng
+
+Web hiện là chat tự nhiên: nhập nội dung, **+ Session mới** để đổi phiên; nút
+**Bằng chứng** mở tool/context và **Chế độ chụp ảnh** hiện quyết định ghi cùng
+memory trước/sau. Không có nút kịch bản bắt buộc trong giao diện chat.
+Xem [hướng dẫn nhập 5 câu và chụp ảnh](SCREENSHOT_GUIDE.md).
+Trace chẩn đoán được lưu riêng dưới `data/sessions/traces/*.json`; lịch sử và
+memory nghiệp vụ vẫn là Markdown. Trace không lưu API key/cấu hình client.
+
+Kịch bản kiểm thử, cách chạy bằng Miniconda `SE373` và báo cáo giới hạn hiện tại:
+[CHALLENGE_A_REPORT.md](CHALLENGE_A_REPORT.md). Kiểm thử bổ sung nằm ở
+`tests/test_challenge_a.py`; các trường hợp `xfail` là lỗi đã biết, không phải PASS.
 
 1. Vẽ lại cơ chế namespace → key → value của store.
 2. Tắt `MEMORY_LONG_TERM` và giải thích vì sao agent không nhớ được quy ước khi đổi session.

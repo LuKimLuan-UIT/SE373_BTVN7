@@ -7,6 +7,7 @@ inject runtime của LangChain nên tương thích nhiều phiên bản.
 from __future__ import annotations
 
 from typing import Any
+import re
 
 from langchain_core.tools import tool
 
@@ -26,13 +27,28 @@ def _format_entries(entries: list[Any]) -> str:
 def build_memory_tools(manager: MemoryManager) -> list:
     """Trả về bộ tool trí nhớ dài hạn đã bind ``manager``."""
 
+    def review(topic: str, content: str, key: str | None = None):
+        """Harness kiểm tra cấu trúc và đích ghi; model chịu trách nhiệm ngữ nghĩa."""
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", topic):
+            raise ValueError("Topic phải là slug chữ thường, ví dụ project hoặc preferences.")
+        if not content.strip():
+            raise ValueError("Nội dung memory rỗng.")
+        if key:
+            entry = manager.find(key)
+            if entry is None:
+                raise KeyError(key)
+            if not entry.is_active or entry.topic != topic:
+                raise ValueError("Harness từ chối: key phải còn active và thuộc đúng topic của user.")
+            if content.strip().casefold() == entry.content.strip().casefold():
+                raise ValueError("Nội dung không đổi; không cần thay thế chính mục đó.")
+
     @tool
     def remember(topic: str, content: str, supersedes: str | None = None, force: bool = False) -> str:
         """Ghi một mục memory mới vào một chủ đề (topic).
 
-        Nếu trong cùng topic đã có mục đang hiệu lực có nội dung gần giống, mục cũ
-        được supersede TRƯỚC (đánh dấu đã bị thay thế, vẫn giữ nguồn và thời điểm),
-        rồi mới ghi mục mới.
+        Model quyết định điều gì đáng nhớ theo ý nghĩa, không dựa vào từ khóa.
+        Nếu thay đổi một quyết định cũ, phải cung cấp supersedes từ recall/index.
+        Harness kiểm tra nội dung, topic, key và trạng thái trước khi ghi.
 
         Args:
             topic: Chủ đề, ví dụ "preferences", "project".
@@ -42,8 +58,11 @@ def build_memory_tools(manager: MemoryManager) -> list:
                 quyết định khác nhau.
         """
         try:
+            review(topic, content, supersedes)
+            if force and supersedes:
+                raise ValueError("Không dùng force cùng supersedes.")
             result = manager.remember(
-                topic, content, supersedes=supersedes, force=force
+                topic, content, supersedes=supersedes, force=True
             )
         except Exception as exc:  # noqa: BLE001 - báo lỗi cho model xử lý
             return f"Không ghi được memory: {exc}"
@@ -55,7 +74,7 @@ def build_memory_tools(manager: MemoryManager) -> list:
                 "\n\nĐã supersede mục cũ (đánh dấu là superseded, vẫn truy vết được): "
                 + ", ".join(superseded)
             )
-        return message
+        return message + "\nHarness: đã kiểm tra nội dung, namespace và key thay thế; không suy xung đột bằng từ khóa."
 
     @tool
     def recall(topic: str | None = None) -> str:
@@ -80,6 +99,12 @@ def build_memory_tools(manager: MemoryManager) -> list:
             content: Nội dung mới.
         """
         try:
+            current = manager.find(key)
+            if current is None:
+                raise KeyError(key)
+            review(current.topic, content)
+            if not current.is_active:
+                raise ValueError("Harness từ chối sửa mục đã bị thay thế.")
             entry = manager.update(key, content)
         except KeyError:
             return f"Không tìm thấy mục memory key={key}."
@@ -98,6 +123,10 @@ def build_memory_tools(manager: MemoryManager) -> list:
             content: Nội dung mới thay thế.
         """
         try:
+            current = manager.find(key)
+            if current is None:
+                raise KeyError(key)
+            review(current.topic, content, key)
             result = manager.supersede(key, content)
         except KeyError:
             return f"Không tìm thấy mục memory key={key}."
@@ -105,7 +134,8 @@ def build_memory_tools(manager: MemoryManager) -> list:
             return f"Không thay thế được memory: {exc}"
         return (
             f"Đã thay thế mục cũ key={key} bằng mục mới key={result['key']} "
-            f"(mục cũ được đánh dấu superseded, vẫn truy vết được)."
+            f"(mục cũ được đánh dấu superseded, vẫn truy vết được). "
+            "Harness: đã kiểm tra key còn hiệu lực và giữ nguồn session hiện tại."
         )
 
     @tool

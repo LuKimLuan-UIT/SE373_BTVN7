@@ -1,0 +1,34 @@
+{
+  "step": 2,
+  "model": "cx/gpt-6-luna",
+  "thread_id": "natural-s2",
+  "pid": 36268,
+  "tools": [
+    "recall"
+  ],
+  "checks": {
+    "model_invoked": true,
+    "fresh_session": true,
+    "recalled": true,
+    "jwt_answer": true
+  },
+  "passed": true,
+  "reply": "Dự án đang dùng JWT để đăng nhập.",
+  "elapsed_seconds": 3.58,
+  "usage": [
+    {
+      "input_tokens": 1796,
+      "output_tokens": 18,
+      "total_tokens": 1814,
+      "input_token_details": {},
+      "output_token_details": {}
+    },
+    {
+      "input_tokens": 1860,
+      "output_tokens": 14,
+      "total_tokens": 1874,
+      "input_token_details": {},
+      "output_token_details": {}
+    }
+  ]
+}

@@ -18,8 +18,11 @@
 - Khi người dùng nói ra một quy ước/quy tắc quan trọng: ghi bằng `remember`.
 - Khi có thông tin mới **thay thế** thông tin cũ: dùng `supersede` (đánh dấu mục cũ
   là `superseded`, giữ lại nguồn và thời điểm) — không xoá lịch sử, không chỉ append.
-- `remember` tự so trùng chủ đề: nếu mục mới thay thế mục cũ, mục cũ được supersede
-  trước rồi mới ghi mục mới. Dùng `force=true` khi chắc chắn là hai quyết định khác nhau.
+- Model xét ý nghĩa để nhận diện quyết định bền vững, không cần từ khóa "lưu/nhớ".
+- Khi thay thế quyết định cũ, lấy key từ index/recall rồi dùng `supersede` hoặc
+  `remember(..., supersedes=key)`. Harness kiểm tra key, topic, trạng thái và nội dung;
+  không đoán xung đột bằng độ trùng từ khóa trong tool dành cho agent.
+- Không ghi giả định, câu hỏi, đề xuất chưa chốt hay credential thành memory.
 - Khi thông tin sai hoặc không còn đúng: dùng `forget`.
 - Không ghi những thứ chỉ là câu chào hỏi hoặc thông tin tức thời.
 

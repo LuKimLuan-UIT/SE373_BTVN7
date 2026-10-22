@@ -10,6 +10,7 @@ bên phải là panel memory (index + chi tiết) và context đang inject.
 from __future__ import annotations
 
 import uuid
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +21,12 @@ from pydantic import BaseModel
 from ..config import load_settings
 from ..runtime import injected_context, runtime_from_settings
 from ..sessions import delete_session, list_sessions, rename_session
+from ..tracing import load_trace
 
 app = FastAPI(title="LangGraph Memory Lab")
 
 _state: dict[str, Any] = {}
+_chat_lock = threading.RLock()
 
 
 def get_runtime():
@@ -60,7 +63,8 @@ def health() -> dict[str, Any]:
         runtime = get_runtime()
     except HTTPException as exc:
         return {"ok": False, "detail": exc.detail}
-    return {"ok": True, "user_id": runtime.settings.user_id}
+    return {"ok": True, "user_id": runtime.settings.user_id,
+            "model": runtime.settings.model_name, "base_url": runtime.settings.base_url}
 
 
 @app.get("/api/sessions")
@@ -86,8 +90,15 @@ def messages(thread_id: str) -> list[dict[str, Any]]:
 @app.post("/api/chat")
 def chat(request: ChatRequest) -> dict[str, Any]:
     runtime = get_runtime()
-    answer = runtime.chat(request.thread_id, request.message)
-    return {"thread_id": request.thread_id, "reply": answer}
+    with _chat_lock:
+        result = runtime.chat_with_trace(request.thread_id, request.message)
+    return {"thread_id": request.thread_id, **result}
+
+
+@app.get("/api/trace/{thread_id}")
+def trace(thread_id: str):
+    runtime = get_runtime()
+    return load_trace(runtime.settings.sessions_dir, thread_id)
 
 
 @app.post("/api/sessions/rename")
