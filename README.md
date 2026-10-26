@@ -404,13 +404,19 @@ B hoàn toàn mới; reset context chỉ bỏ active messages/checkpoint của p
 tại, giữ archive, memory dài hạn và usage đã tiêu thụ. Cả hai không gọi model,
 không sửa dữ liệu Challenge A; archive/chat cũ vẫn giữ riêng để đối chiếu.
 
-Chat mới và context vừa reset hiển thị **0 · chưa nạp**. Dòng **Lượt đầu dự kiến**
-vẫn ước lượng phần instructions, memory index (nếu có) và tool schemas sẽ được
-gửi kèm tin nhắn đầu tiên. Sau khi gửi hoặc nạp phiên mẫu, thanh context chuyển
-sang ước lượng lượt kế gồm cả phần nền và hội thoại đang dùng. Mỗi request tới
-model đều gửi lại system prompt/công cụ, kể cả ở session mới; không đính kèm
-history/checkpoint của session khác. API giữ `context.estimated_input_tokens`
-là dự báo lượt kế, thêm `loaded_estimated_tokens` (0 khi chưa nạp) và `state`.
+Chat mới và context vừa reset hiển thị **0 · chưa nạp**. Sau khi gửi hoặc nạp phiên
+mẫu, thanh **Context · hiện tại (ước lượng)** hiển thị snapshot đang dùng của phiên:
+active history/checkpoint (gồm câu trả lời mới nhất), instructions, memory index
+và tool schemas. Không gồm archive, tin nhắn đang gõ hoặc dự đoán nội dung tương
+lai. Ước lượng dùng JSON UTF-8 bytes/4, không phải tokenizer của model. UI đọc
+`context.loaded_estimated_tokens`; `state` cho biết đã nạp hay chưa. Trường API cũ
+`estimated_input_tokens` vẫn giữ để tương thích, không dùng làm thanh context chính.
+
+**Usage · cộng dồn phiên** là tổng input/output provider báo của các request đã
+gửi. Khi gửi context cùng tin nhắn mới, provider đếm chúng thành input của request;
+output được giữ trong history sẽ thuộc context hiện tại và có thể được gửi lại ở
+request sau. Mỗi request gửi lại system prompt/công cụ, chỉ dùng history/checkpoint
+của phiên hiện tại. Tổng usage không phải kích thước context đang giữ.
 
 Đường API/CLI cũ vẫn dùng `POST /api/compact` với `{"thread_id":"session-1"}`.
 Để dùng B2 qua chat A/CLI, phải cấp `CODE_MODE_LOGS_DIR`; trang B tự cấp thư mục

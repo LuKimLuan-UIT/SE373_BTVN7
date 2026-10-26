@@ -42,14 +42,31 @@ const setChat = value => run('current=' + JSON.stringify(value));
   run('render()');
   assert.match(element('context-value').textContent, /^0 \/ /);
   assert.match(element('context-state').textContent, /chưa nạp/);
-  assert.match(element('context-note').textContent, /2\.260/); // Forecast must not pretend first input is free.
+  assert.match(element('context-note').textContent, /Chưa nạp/);
+  assert.doesNotMatch(element('context-note').textContent, /dự kiến|2\.260/);
   assert.equal(element('context-fill').style.width, '0%');
   assert.equal(element('compact-btn').disabled, true);
 
-  setChat(chat('bchat-000000000001', true));
+  const activeChat = chat('bchat-000000000001', true);
+  // The current snapshot is independent of cumulative usage and any forecast field.
+  activeChat.context.estimated_input_tokens = 9000;
+  activeChat.usage.actual_input_tokens = 5699;
+  activeChat.usage.actual_output_tokens = 298;
+  activeChat.usage.requests = 2;
+  setChat(activeChat);
   run('render()');
   assert.match(element('context-value').textContent, /^2\.600/);
-  assert.match(element('context-state').textContent, /ước lượng lượt kế/);
+  assert.match(element('context-state').textContent, /hiện tại \(ước lượng\)/);
+  assert.match(element('context-note').textContent, /History\/checkpoint/);
+  assert.match(element('usage-value').textContent, /5\.699 input.*298 output/);
+  const currentId = run('current.thread_id');
+  const storedBefore = JSON.stringify(run('current'));
+  element('input').value = 'Unsent draft';
+  run('meter()');
+  assert.match(element('context-value').textContent, /^2\.600/);
+  assert.equal(JSON.stringify(run('current')), storedBefore);
+  assert.equal(run('current.thread_id'), currentId);
+  assert.equal(calls.length, 0); // Rendering must not call chat/new, reset or provider endpoints.
   await run('resetAll()');
   await run('resetContext()');
   assert.equal(calls.length, 0); // Cancel must not write anything.
