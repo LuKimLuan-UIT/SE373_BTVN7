@@ -390,6 +390,12 @@ Trang B mặc định **Offline · 0 API**, không cần key/model: compact trí
 cấu trúc và đếm log bằng code. Chọn **Provider .env** khi muốn model thật; không
 có chuyển chế độ tự động. Xem [6 kịch bản và đáp án chuẩn](CHALLENGE_B_SCENARIOS.md).
 
+Hai nút **Xóa memory B** và **Reset context** nằm ngay dưới ô nhập (cả trên mobile):
+xóa memory cần xác nhận, xóa mọi mục active/superseded của riêng B và mở chat B mới;
+reset context bỏ active messages/checkpoint của phiên B hiện tại, giữ archive,
+memory dài hạn và usage đã tiêu thụ. Context sau reset vẫn gồm instructions và tool
+schemas nên không về 0. Cả hai không gọi model, không sửa dữ liệu Challenge A.
+
 Đường API/CLI cũ vẫn dùng `POST /api/compact` với `{"thread_id":"session-1"}`.
 Để dùng B2 qua chat A/CLI, phải cấp `CODE_MODE_LOGS_DIR`; trang B tự cấp thư mục
 fixture giả lập riêng. Không cần thay `.env` để thử trang B.

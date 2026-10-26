@@ -1,6 +1,7 @@
 """Separate page, namespace isolation and real graph/tool calls with an offline model."""
 import importlib
 import json
+from pathlib import Path
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -8,6 +9,8 @@ from langchain_core.messages import AIMessage
 from memory_agent.challenge_b_lab import ChallengeBLab
 from memory_agent.context import CHECKPOINT_PREFIX
 from memory_agent.graph import build_agent
+from memory_agent.memory.lifecycle import MemoryManager
+from memory_agent.memory.store import MarkdownMemoryStore
 from memory_agent.runtime import Runtime
 from memory_agent.sessions import list_sessions
 from tests.test_agent_memory import FakeToolChatModel, make_runtime, make_settings, tool_call
@@ -34,6 +37,8 @@ def test_page_is_separate_and_has_experiment_controls(page):
     response = request(app, "GET", "/challenge-b")
     assert response.status_code == 200
     assert 'id="compact-btn"' in response.text
+    assert 'id="clear-memory-btn"' in response.text
+    assert 'id="reset-context-btn"' in response.text
     assert 'id="code-prompts"' in response.text
     assert "/api/chat" not in response.text
     assert 'href="/challenge-b"' in request(app, "GET", "/").text
@@ -223,3 +228,105 @@ def test_offline_config_load_does_not_require_model_or_key(tmp_path, monkeypatch
     settings, missing = config.load_settings(offline=True)
     assert settings is not None and missing == []
     assert settings.api_key == "" and settings.model_name == ""
+
+
+def snapshot(directory):
+    return {str(p.relative_to(directory)): p.read_bytes() for p in Path(directory).rglob("*") if p.is_file()}
+
+
+def test_clear_b_memory_removes_all_statuses_without_touching_a_or_archives(page):
+    app, lab, a = page
+    a.chat("a-session", "Lịch sử riêng của A")
+    a_before = snapshot(Path(a.settings.memory_dir).parent)
+    manager = MemoryManager(MarkdownMemoryStore(lab.settings.memory_dir, lab.settings.user_id), lab.settings.user_id)
+    old = manager.remember("auth", "B dùng JWT")
+    manager.supersede(old["key"], "B dùng cookie")
+    other = MarkdownMemoryStore(lab.settings.memory_dir, "other-user")
+    other.put(("memory", "other-user", "auth"), "other", {"content": "Giữ nguyên"})
+    seeded = lab.seed(execution="offline")
+    lab.compact(seeded["thread_id"])
+    before = {d: snapshot(lab.root / d) for d in ("sessions", "chat-ui", "logs", "results")}
+    assert request(app, "POST", "/api/challenge-b/memory/clear", json={"execution": "invalid"}).status_code == 422
+    assert len(manager.entries(include_superseded=True)) == 2
+    response = request(app, "POST", "/api/challenge-b/memory/clear", json={"execution": "offline"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] and data["deleted"] == 2
+    fresh = data["chat"]
+    assert fresh["thread_id"] != seeded["thread_id"]
+    assert fresh["execution"] == "offline" and fresh["timeline"] == []
+    assert fresh["context"]["active"]["serialized_bytes"] == 2
+    assert fresh["usage"]["requests"] == 0
+    assert manager.entries(include_superseded=True) == []
+    assert "cookie" not in manager.index_text()
+    assert other.get(("memory", "other-user", "auth"), "other") is not None
+    assert snapshot(Path(a.settings.memory_dir).parent) == a_before
+    for directory, files in before.items():
+        after = snapshot(lab.root / directory)
+        assert all(after[name] == content for name, content in files.items())
+    assert lab.model.calls == 0
+    assert request(app, "POST", "/api/challenge-b/memory/clear", json={}).json()["deleted"] == 0
+
+
+def test_reset_b_context_persists_empty_active_keeps_archive_memory_and_usage(page):
+    app, lab, a = page
+    a.chat("a-session", "A vẫn giữ context")
+    a_before = snapshot(Path(a.settings.memory_dir).parent)
+    seed = lab.seed(execution="provider")
+    thread = seed["thread_id"]
+    lab.compact(thread)
+    lab.model = FakeToolChatModel(responses=[AIMessage(content="Giữ lịch sử để đối chiếu", usage_metadata={
+        "input_tokens": 123, "output_tokens": 8, "total_tokens": 131})])
+    before = lab.send(thread, "OLD_CONTEXT_MARKER")
+    _, archive = lab._working(thread).load()
+    manager = MemoryManager(MarkdownMemoryStore(lab.settings.memory_dir, lab.settings.user_id), lab.settings.user_id)
+    manager.remember("auth", "Memory B cần giữ")
+    memory_before = snapshot(lab.root / "memory")
+    other = lab.new_chat(execution="offline")
+    other_before = lab.chat_view(other["thread_id"])
+    response = request(app, "POST", "/api/challenge-b/chat/reset-context", json={"thread_id": thread})
+    assert response.status_code == 200
+    after = response.json()
+    assert after["thread_id"] == thread and after["execution"] == "provider"
+    assert lab._working(thread).load() == ([], archive)
+    assert after["usage"] == before["usage"]
+    assert after["context"]["archive_messages"] == before["context"]["archive_messages"]
+    assert 0 < after["context"]["estimated_input_tokens"] < before["context"]["estimated_input_tokens"]
+    assert after["timeline"][:-1] == before["timeline"]
+    assert after["timeline"][-1]["kind"] == "reset"
+    assert request(app, "GET", "/api/challenge-b/chat/" + thread).json() == after
+    assert lab.chat_view(other["thread_id"]) == other_before
+    assert snapshot(lab.root / "memory") == memory_before
+    assert snapshot(Path(a.settings.memory_dir).parent) == a_before
+    assert lab.model.calls == 1
+    # The next real graph invocation must not replay archive/checkpoint/UI events.
+    continued = lab.send(thread, "NEW_CONTEXT_MARKER")
+    prompts = json.dumps(continued["timeline"][-1]["prompts"], ensure_ascii=False)
+    assert "NEW_CONTEXT_MARKER" in prompts and "Memory B cần giữ" in prompts
+    assert "OLD_CONTEXT_MARKER" not in prompts and CHECKPOINT_PREFIX not in prompts
+
+
+@pytest.mark.parametrize("thread", ["../a", "a-session", "bchat-invalid", "bchat-000000000000"])
+def test_reset_context_rejects_other_or_missing_sessions_without_changes(page, thread):
+    app, lab, a = page
+    before = snapshot(lab.root.parent)
+    response = request(app, "POST", "/api/challenge-b/chat/reset-context", json={"thread_id": thread})
+    assert response.status_code == 400
+    assert snapshot(lab.root.parent) == before
+
+
+def test_new_b_chat_does_not_send_previous_chat_history_or_checkpoint(page):
+    app, lab, _ = page
+    previous = lab.seed(execution="offline")["thread_id"]
+    lab.compact(previous)
+    lab.send(previous, "OLD_CHAT_ONLY_MARKER")
+    old_context = lab._working(previous).load()
+    lab.model = FakeToolChatModel(responses=[AIMessage(content="Chat riêng")])
+    fresh = request(app, "POST", "/api/challenge-b/chat/new", json={"execution": "provider"}).json()
+    assert lab._working(fresh["thread_id"]).load() == ([], [])
+    data = lab.send(fresh["thread_id"], "NEW_CHAT_ONLY_MARKER")
+    prompts = json.dumps(data["timeline"][-1]["prompts"], ensure_ascii=False)
+    assert "NEW_CHAT_ONLY_MARKER" in prompts
+    assert "OLD_CHAT_ONLY_MARKER" not in prompts and CHECKPOINT_PREFIX not in prompts
+    assert "DEBUG duplicate" not in prompts and "race.log:7" not in prompts
+    assert lab._working(previous).load() == old_context

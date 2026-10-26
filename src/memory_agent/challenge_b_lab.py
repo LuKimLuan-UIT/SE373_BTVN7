@@ -192,6 +192,26 @@ class ChallengeBLab:
         self._write_ui(thread, {"execution": execution, "timeline": [], "turns": []})
         return self.chat_view(thread)
 
+    def clear_memory(self, execution="offline"):
+        """Clear only B's long-term memory and open a fresh B context."""
+        if execution not in {"offline", "provider"}:
+            raise ValueError("Chế độ phải là offline hoặc provider")
+        store = MarkdownMemoryStore(self.settings.memory_dir, self.settings.user_id)
+        deleted = store.clear()
+        return {"ok": True, "deleted": deleted, "chat": self.new_chat(execution)}
+
+    def reset_context(self, thread):
+        """Drop active messages/checkpoints, retaining B's archive and actual usage."""
+        working = self._working(thread)
+        _, archive = working.load()
+        ui = self._read_ui(thread)
+        working.save([], archive)
+        ui["timeline"].append({"kind": "reset", "content":
+            "Đã reset context và checkpoint của phiên B. Tin nhắn phía trên chỉ còn là lịch sử, "
+            "không gửi lại model. Archive, memory dài hạn và usage đã tiêu thụ được giữ nguyên."})
+        self._write_ui(thread, ui)
+        return self.chat_view(thread)
+
     def chat_view(self, thread):
         active, archive = self._working(thread).load()
         ui = self._read_ui(thread)

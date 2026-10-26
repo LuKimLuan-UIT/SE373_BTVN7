@@ -121,3 +121,15 @@ python -m pytest -q --basetemp=data/pytest-b --junitxml=reports/pytest-challenge
 `test_offline_flow_never_builds_or_calls_model_and_needs_no_key` chặn `build_model`
 bằng hàm luôn báo lỗi, rồi chạy seed, compact, continuation và đếm log. Nếu có
 đường gọi provider ngoài ý muốn thì test thất bại; không chỉ kiểm tra nhãn “Offline”.
+
+## Dọn memory và reset context trên trang B
+
+- **Xóa memory B**: xác nhận xóa mọi memory dài hạn của B (active và superseded),
+  rồi mở chat B mới với chế độ đang chọn. Chat/archive cũ vẫn giữ để đối chiếu.
+- **Reset context**: xác nhận bỏ active messages và checkpoint của phiên B hiện tại.
+  Giữ memory dài hạn, archive, lịch sử hiển thị và usage đã tiêu thụ; có mốc reset
+  ngay trong chat. Tin nhắn trước mốc không nằm trong context lượt tiếp theo.
+
+Hai nút nằm dưới ô nhập trên desktop và mobile, bị khóa khi đang xử lý yêu cầu.
+Không gọi model và chỉ tác động namespace B; không xóa dữ liệu Challenge A.
+Context sau reset còn instructions, memory index và tool schemas nên không về 0.

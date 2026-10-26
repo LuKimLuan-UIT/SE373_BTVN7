@@ -44,6 +44,16 @@ def new_chat(request: ModeRequest):
     return execute(lambda lab: lab.new_chat(request.execution))
 
 
+@router.post("/api/challenge-b/memory/clear")
+def clear_memory(request: ModeRequest):
+    return execute(lambda lab: lab.clear_memory(request.execution))
+
+
+@router.post("/api/challenge-b/chat/reset-context")
+def reset_context(request: B1Request):
+    return execute(lambda lab: lab.reset_context(request.thread_id))
+
+
 @router.get("/api/challenge-b/chat/{thread_id}")
 def get_chat(thread_id: str):
     return execute(lambda lab: lab.chat_view(thread_id))
