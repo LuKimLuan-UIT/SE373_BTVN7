@@ -121,3 +121,25 @@ python -m pytest -q --basetemp=data/pytest-b --junitxml=reports/pytest-challenge
 `test_offline_flow_never_builds_or_calls_model_and_needs_no_key` chặn `build_model`
 bằng hàm luôn báo lỗi, rồi chạy seed, compact, continuation và đếm log. Nếu có
 đường gọi provider ngoài ý muốn thì test thất bại; không chỉ kiểm tra nhãn “Offline”.
+
+## Dọn memory và reset context trên trang B
+
+- **Reset tất cả B**: xác nhận xóa mọi memory dài hạn của B (active và superseded),
+  rồi mở chat B mới với chế độ đang chọn, context hiển thị **0 · chưa nạp**.
+  Chat/archive cũ vẫn giữ riêng để đối chiếu; không tự nạp lại vào phiên mới.
+- **Reset context**: xác nhận bỏ active messages và checkpoint của phiên B hiện tại.
+  Giữ memory dài hạn, archive, lịch sử hiển thị và usage đã tiêu thụ; có mốc reset
+  ngay trong chat. Tin nhắn trước mốc không nằm trong context lượt tiếp theo.
+
+Hai nút nằm dưới ô nhập trên desktop và mobile, bị khóa khi đang xử lý yêu cầu.
+Không gọi model và chỉ tác động namespace B; không xóa dữ liệu Challenge A.
+Context vừa reset hiển thị **0 · chưa nạp**. Sau tin đầu hoặc nạp phiên mẫu, thanh
+**Context · hiện tại (ước lượng)** đo snapshot hiện tại: instructions, memory index,
+tool schemas và active history/checkpoint, gồm cả câu trả lời mới nhất được giữ
+trong history. Không gồm archive, tin nhắn đang gõ hay dự đoán nội dung tương lai.
+Số đo dùng JSON UTF-8 bytes/4 nên có thể khác tokenizer của provider. System prompt
+và công cụ gửi lại ở mỗi request; **Usage · cộng dồn phiên** chỉ ghi nhận các request
+đã gọi provider và cộng cả những phần context được gửi nhiều lần.
+Để kiểm chứng: nạp phiên dài → Reset tất cả B → kiểm tra 0/chưa nạp → reload vẫn 0
+→ gửi tin đầu → kiểm tra thanh context và **Xem context gửi model** (Provider).
+Trong Offline, thanh đo chỉ mô phỏng context; usage/API calls vẫn bằng 0.

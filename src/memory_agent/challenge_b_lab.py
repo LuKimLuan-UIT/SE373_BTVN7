@@ -8,9 +8,9 @@ import uuid
 
 from langchain_core.tools import tool
 
-from .challenge_b_scenarios import FIXTURES, QUESTION, long_history, prepare_logs
+from .challenge_b_scenarios import QUESTION, truncation_history, prepare_logs
 from .code_mode import build_code_tools
-from .context import CHECKPOINT_PREFIX, Checkpoint, WorkingContext, context_size
+from .context import WorkingContext, context_size
 from .graph import build_agent, build_model, append_checkpoint_context
 from .runtime import injected_context
 from .prompts import build_memory_digest
@@ -20,7 +20,7 @@ from .memory.store import MarkdownMemoryStore
 from .memory_tools import build_memory_tools
 from .metrics import input_metrics, reduction
 from .runtime import Runtime
-from .offline import OfflineCompactor
+from .truncation import truncate, RISK
 from .code_mode import execute_code
 from .challenge_b_scenarios import CODE
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -66,7 +66,7 @@ class ChallengeBLab:
 
     def seed(self, execution="provider"):
         thread = "b1-" + uuid.uuid4().hex[:12]
-        history = long_history()
+        history = truncation_history()
         working = WorkingContext(self.settings.sessions_dir, thread)
         working.save(history, history)
         write_history(self.settings.sessions_dir, thread, history, title="B1 · refresh-token race")
@@ -76,48 +76,34 @@ class ChallengeBLab:
                              "next_action": "Thêm concurrency test trong tests/test_refresh.py, kiểm tra session lock",
                              "debug_lines": 1600}}
         self.save("b1-seed", result)
-        self._write_ui(thread, {"execution": execution, "timeline": [{"kind": "scenario", "content": "Đã nạp phiên dài giả lập: lỗi 401 khi refresh đồng thời. Giữ API /refresh, không log token. Tăng timeout 30s không hiệu quả. Bước kế tiếp: thêm test trong tests/test_refresh.py rồi kiểm tra session lock. Archive chứa 1.600 dòng debug lặp."}], "turns": []})
+        self._write_ui(thread, {"execution": execution, "timeline": [{"kind": "scenario", "content": "Phiên mẫu có 3 lượt user→assistant. Lượt đầu chứa ràng buộc /refresh, cách tăng timeout thất bại và 1.600 dòng debug. Hai lượt cuối chỉ còn tình trạng 401 và chờ yêu cầu. Truncation giữ 2 lượt cuối sẽ làm mất thông tin của lượt đầu khỏi context; archive vẫn giữ nguyên."}], "turns": []})
         return result
 
-    def compact(self, thread):
+    def compact(self, thread, *, keep_turns=2):
         working = self._working(thread)
-        offline = self._read_ui(thread).get("execution") == "offline"
-        try:
-            if offline:
-                result = working.compact(OfflineCompactor())
-            else:
-                rt, _ = self.runtime()
-                result = rt.compact(thread)
-        except Exception as exc:
-            self._record_failure(thread, exc, kind="compact")
-            raise
+        result = truncate(working, keep_turns=keep_turns)
         result["reduction_percent_estimated"] = reduction(result["before"]["estimated_tokens"], result["after"]["estimated_tokens"])
         active, archive = working.load()
-        result["archive_preserved"] = any("DEBUG duplicate" in str(m.content) for m in archive)
         result["active_preview"] = [{"role": m.type, "content": m.content} for m in active]
         result["thread_id"] = thread
-        result["execution"] = "offline" if offline else "provider"
         ui = self._read_ui(thread)
-        ui["timeline"].append({"kind": "compact", "content": "Đã compact context và giữ archive.",
-                               "before": result["before"], "after": result["after"], "checkpoint": result["checkpoint"]})
-        count = len(result["compaction_usage"])
-        ui["turns"].append({"requests": result["compaction_requests"], "estimated_input_tokens": result["compaction_input_estimate"],
-                            "actual_input_tokens": 0 if offline else sum(u["input_tokens"] for u in result["compaction_usage"]) if count == result["compaction_requests"] and count else None,
-                            "actual_output_tokens": 0 if offline else sum(u.get("output_tokens", 0) for u in result["compaction_usage"]) if count else None,
-                            "kind": "compact"})
+        result["execution"] = ui.get("execution", "offline")
+        ui["timeline"].append({"kind": "compact", "content": "Đã bỏ các lượt cũ bằng truncation.",
+                               "before": result["before"], "after": result["after"],
+                               "technique": "truncation", "keep_turns": keep_turns,
+                               "dropped_turns": result["dropped_turns"],
+                               "dropped_messages": result["dropped_messages"], "risk": RISK})
         self._write_ui(thread, ui)
         self.save("b1-compact", result)
         return result
 
     def continue_task(self, thread):
-        active, _ = self._working(thread).load()
-        if not any(str(m.content).startswith(CHECKPOINT_PREFIX) for m in active):
-            raise ValueError("Cần compact trước khi kiểm tra continuation")
-        rt, tools = self.runtime()
-        data = rt.chat_with_trace(thread, "Tiếp tục: nêu bước kế tiếp, constraints và cách đã thử không hiệu quả. Chưa cần thực thi.")
-        data["thread_id"] = thread
-        data["measurement"] = input_metrics(data["trace"]["prompts"], tools, data["trace"]["usage"])
-        data["raw_debug_absent"] = "DEBUG duplicate" not in json.dumps(data["trace"]["prompts"])
+        ui = self._read_ui(thread)
+        if not any(m.get("technique") == "truncation" for m in ui["timeline"]):
+            raise ValueError("Cần truncation trước khi kiểm tra continuation")
+        chat = self.send(thread, "Tiếp tục: nêu điều còn biết và thông tin còn thiếu từ context hiện tại. Không đoán lại ràng buộc hoặc bằng chứng đã mất.")
+        data = {"thread_id": thread, "reply": chat["timeline"][-1]["content"],
+                "measurement": chat["usage"]["last"], "execution": chat["execution"], "technique": "truncation"}
         self.save("b1-continuation", data)
         return data
 
@@ -155,7 +141,7 @@ class ChallengeBLab:
         directory = self.root / "results"
         directory.mkdir(exist_ok=True)
         result = {**data, "at": datetime.now(timezone.utc).isoformat(),
-                  "model": "offline-no-model" if data.get("execution") == "offline" else self.settings.model_name}
+                  "model": "no-model-truncation" if data.get("technique") == "truncation" else "offline-no-model" if data.get("execution") == "offline" else self.settings.model_name}
         path = directory / f"{name}.json"
         temporary = path.with_suffix(".tmp")
         temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -192,6 +178,26 @@ class ChallengeBLab:
         self._write_ui(thread, {"execution": execution, "timeline": [], "turns": []})
         return self.chat_view(thread)
 
+    def clear_memory(self, execution="offline"):
+        """Clear only B's long-term memory and open a fresh B context."""
+        if execution not in {"offline", "provider"}:
+            raise ValueError("Chế độ phải là offline hoặc provider")
+        store = MarkdownMemoryStore(self.settings.memory_dir, self.settings.user_id)
+        deleted = store.clear()
+        return {"ok": True, "deleted": deleted, "chat": self.new_chat(execution)}
+
+    def reset_context(self, thread):
+        """Drop active messages/checkpoints, retaining B's archive and actual usage."""
+        working = self._working(thread)
+        _, archive = working.load()
+        ui = self._read_ui(thread)
+        working.save([], archive)
+        ui["timeline"].append({"kind": "reset", "content":
+            "Đã reset context và checkpoint của phiên B. Tin nhắn phía trên chỉ còn là lịch sử, "
+            "không gửi lại model. Archive, memory dài hạn và usage đã tiêu thụ được giữ nguyên."})
+        self._write_ui(thread, ui)
+        return self.chat_view(thread)
+
     def chat_view(self, thread):
         active, archive = self._working(thread).load()
         ui = self._read_ui(thread)
@@ -217,8 +223,13 @@ class ChallengeBLab:
         complete_output = all(t.get("actual_output_tokens") is not None for t in turns)
         return {"thread_id": thread, "timeline": ui["timeline"], "execution": "offline" if offline else "provider",
                 "model": "Offline · code thuần · 0 API" if offline else self.settings.model_name,
-                "context": {"estimated_input_tokens": estimate, "active": context_size(active),
-                            "archive_messages": len(archive), "method": "JSON UTF-8 bytes/4; includes instructions and tool schemas; excludes next user message", "provider_context_limit": None},
+                "context": {"estimated_input_tokens": estimate,
+                            "loaded_estimated_tokens": estimate if active else 0,
+                            "state": "ready" if active else "not_loaded",
+                            "active_messages": len(active), "active": context_size(active),
+                            "archive_messages": len(archive),
+                            "method": "JSON UTF-8 bytes/4; estimated_input_tokens forecasts next input including instructions/tools; loaded_estimated_tokens is 0 until active messages exist; excludes next user message",
+                            "provider_context_limit": None},
                 "usage": {"requests": sum(t["requests"] for t in turns),
                           "actual_input_tokens": sum(t["actual_input_tokens"] for t in turns) if complete_input else None,
                           "actual_output_tokens": sum(t.get("actual_output_tokens", 0) for t in turns) if complete_output else None,
@@ -273,11 +284,10 @@ class ChallengeBLab:
             events = [{"kind": "call", "name": name, "args": {} if mode == "native" else {"code": CODE}},
                       {"kind": "result", "name": name, "content": "Raw output giữ trong archive; offline không gửi model." if mode == "native" else output}]
         elif re.search(r"tiếp tục|bước kế|constraint|ràng buộc|đã thử", message, re.IGNORECASE):
-            checkpoints = [str(m.content)[len(CHECKPOINT_PREFIX):] for m in active if str(m.content).startswith(CHECKPOINT_PREFIX)]
-            cp = Checkpoint.model_validate_json(checkpoints[-1]) if checkpoints else Checkpoint.model_validate_json(OfflineCompactor().invoke(active).content)
-            answer = "[Offline · đọc checkpoint/trích dẫn, không có LLM]\nBước kế tiếp: " + cp.next_action + "\nConstraints: " + "; ".join(cp.constraints) + "\nĐã thử: " + "; ".join(cp.failed_attempts)
+            excerpts = [f"{m.type}: {str(m.content)[:1000]}" for m in active if m.type in {"human", "ai"} and str(m.content).strip()]
+            answer = "[Offline · trích active context, không có LLM]\n" + "\n".join(excerpts[-4:]) + "\n" + RISK + " Không tự đọc archive để khôi phục thông tin đã bỏ."
         else:
-            answer = "[Offline · không gọi model]\nChế độ này hỗ trợ kịch bản có cấu trúc: nạp phiên dài rồi compact; hỏi bước kế tiếp/ràng buộc; hỏi đếm lỗi log. Tôi không suy luận tự do. Chọn Provider nếu muốn chat tổng quát."
+            answer = "[Offline · không gọi model]\nChế độ này hỗ trợ: nạp phiên mẫu rồi truncation; hỏi bước kế tiếp/ràng buộc; hỏi đếm lỗi log. Tôi không suy luận tự do. Chọn Provider nếu muốn chat tổng quát."
         additions.append(AIMessage(content=answer))
         working.save([*active, *additions], [*archive, *additions])
         write_history(self.settings.sessions_dir, thread, [*archive, *additions], title="Challenge B · Offline")

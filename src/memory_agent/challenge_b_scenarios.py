@@ -30,3 +30,12 @@ def prepare_logs(destination, scale=80):
         (destination / source.name).write_text(
             (source.read_text(encoding="utf-8").rstrip() + "\n") * scale, encoding="utf-8")
     return destination
+
+
+def truncation_history():
+    """Three complete turns: original constraints/log evidence sit in the oldest turn."""
+    return [*long_history(),
+            HumanMessage(content="Ghi nhận tình trạng hiện tại của công việc."),
+            AIMessage(content="Lỗi 401 chưa được xử lý; chưa có thay đổi code."),
+            HumanMessage(content="Chuẩn bị tiếp tục từ đoạn trao đổi gần nhất."),
+            AIMessage(content="Chờ yêu cầu tiếp theo.")]

@@ -264,10 +264,26 @@ run_web
 ```
 
 Nếu dùng PowerShell, nhập `.\run_web.cmd`.
-Launcher dùng Python của môi trường `SE373` và dùng lại dịch vụ 9Router nếu đang
-chạy. Nếu không tìm thấy 9Router đã cài, script tự cài bản 0.5.104 vào
-`data/local-router/` của dự án (lần đầu cần mạng), rồi khởi động dịch vụ.
+Launcher dùng Python của môi trường `SE373`. 9Router được lấy từ npm global
+(prefix npm/PATH), có in đường dẫn CLI và phiên bản đã cài. Không tự dùng/cài bản
+local cũ trong `data/local-router`. Nếu chưa có global, chạy
+`npm i -g 9router@latest --prefer-online`. `-RouterCliPath` là override tường minh.
+Trước khi dùng lại router trên cổng 20128, launcher kiểm tra đường dẫn tiến trình;
+router từ bản local/ứng dụng khác sẽ báo lỗi thay vì âm thầm dùng lại.
+
+Kiểm tra an toàn bằng `run_web -CheckRouterOnly`: chỉ đọc đường dẫn/phiên bản và
+trạng thái router, không khởi động/dừng dịch vụ, không thay dữ liệu phiên. Sau khi
+update npm khi router đang chạy, dùng `stop_web` rồi `run_web` khi sẵn sàng để
+nạp code mới; chỉ cài npm không tự thay code đã nạp trong tiến trình đang chạy.
 Có thể đổi cổng bằng `run_web -AppPort 8001`.
+
+Để dừng cả web và 9Router (gồm tiến trình tray), chạy `stop_web` trong Miniconda
+Prompt hoặc `.\stop_web.cmd` trong PowerShell, từ `BTVN7` hoặc `memory_agent`.
+Lệnh chỉ dừng tiến trình, giữ nguyên memory/lịch sử/checkpoint của A và B cùng
+các file dữ liệu. Chạy lại khi đã dừng cũng được. Nếu dùng cổng web khác, truyền
+cùng cổng: `stop_web -AppPort 8001`. Có thể xem trước bằng `stop_web -WhatIf`.
+Script kiểm tra command line trước khi dừng; nếu cổng thuộc ứng dụng khác sẽ báo
+lỗi và giữ ứng dụng đó. Dùng `run_web` để khởi động lại.
 
 Trên giao diện có hai nút để thử nghiệm nhanh:
 
@@ -366,35 +382,37 @@ uv run python scripts/demo_cli.py context
 
 ### Bài tập Challenge B — Context Management
 
-Đã bổ sung B1 compact chủ động bằng checkpoint + archive và B2 Code Mode đọc,
-lọc, tổng hợp nhiều log qua tool `run_code`. Memory của Challenge A tiếp tục dùng
-index/recall hiện có; B2 mặc định tắt và chỉ bật khi cấp `CODE_MODE_LOGS_DIR`.
+Bản web B hiện dùng **Truncation**: bỏ các lượt hội thoại cũ, giữ N lượt gần nhất
+(mặc định 2). Không gọi model để compact, không tạo summary/checkpoint, không tăng
+usage. Chỉ cắt tại ranh giới lượt user để giữ đầy đủ AI/tool calls/results. Ràng buộc
+và bằng chứng nằm trong lượt cũ có thể mất; đây là baseline có mất thông tin.
+
+Mở **http://127.0.0.1:8000/challenge-b**. Chọn Offline để thử không tốn API:
+**Nạp phiên dài mẫu → ⓘ chọn số lượt giữ → Truncation**. Xem số lượt/messages bị bỏ,
+context trước/sau và cảnh báo mất thông tin. Ngưỡng demo mặc định 8.000, cảnh báo
+80%; chỉ nhắc, không tự compact và không phải context limit model.
+
+B2 giữ Code Mode qua `run_code`: đọc/lọc/đếm log trong runtime và trả findings
+có nguồn file/dòng; có đối chứng raw log riêng. Chỉ các lượt chat Provider mới gọi
+model trong `.env`. Offline trích active messages/đếm log bằng code, không suy luận
+LLM và không tự lấy lại thông tin đã truncation từ archive.
+
+Context hiện tại là ước lượng snapshot active messages + instructions/memory index
++ tools; phiên trống hiện 0 · chưa nạp. Usage cộng dồn input/output các request đã
+thực hiện. Archive và transcript giữ để xem lại, không tự gửi lại model sau truncation.
+Session/memory B vẫn nằm trong `data/challenge-b`, tách khỏi A.
+
+**Reset tất cả B** xóa memory B và mở chat mới; **Reset context** chỉ bỏ active
+context phiên đang mở. Hai nút giữ archive cũ và không tác động Challenge A.
+
+Xem [hướng dẫn B hiện tại](CHALLENGE_B_TRUNCATION_GUIDE.md). Báo cáo/scenario/decision
+cũ và các script checkpoint cũ được giữ để tái lập phiên bản trước; chúng không mô
+tả thuật toán compact của trang B hiện tại. API/CLI chung `/api/compact` và
+`demo_cli.py compact` vẫn giữ hành vi cũ để không thay đổi Challenge A.
 
 ```powershell
-# Offline, không cần API key
-python scripts/challenge_b_demo.py --output reports/challenge-b
 python -m pytest -q --basetemp=data/pytest-b
-
-# Model đã cấu hình: compact session rồi tiếp tục
-python scripts/demo_cli.py compact --thread session-1
-python scripts/demo_cli.py chat --thread session-1 'Tiếp tục từ bước kế tiếp.'
 ```
-
-Mở **http://127.0.0.1:8000/challenge-b** để dùng trang chat riêng: usage tổng phiên,
-context ước lượng, cảnh báo từ 80% ngưỡng demo, nút compact và checkpoint trước/sau
-ngay trong hội thoại. Menu có phiên dài mẫu B1, câu hỏi log B2 và native baseline
-trong đoạn chat riêng. Session/memory B nằm trong `data/challenge-b`, tách khỏi A.
-Ngưỡng demo mặc định 8.000 là ngân sách quan sát, không phải context limit model.
-
-Trang B mặc định **Offline · 0 API**, không cần key/model: compact trích xuất có
-cấu trúc và đếm log bằng code. Chọn **Provider .env** khi muốn model thật; không
-có chuyển chế độ tự động. Xem [6 kịch bản và đáp án chuẩn](CHALLENGE_B_SCENARIOS.md).
-
-Đường API/CLI cũ vẫn dùng `POST /api/compact` với `{"thread_id":"session-1"}`.
-Để dùng B2 qua chat A/CLI, phải cấp `CODE_MODE_LOGS_DIR`; trang B tự cấp thư mục
-fixture giả lập riêng. Không cần thay `.env` để thử trang B.
-Xem [báo cáo B, cách chạy và giới hạn](CHALLENGE_B_REPORT.md) cùng
-[lý do chọn thuật toán compact](CONTEXT_COMPACTION_DECISION.md).
 
 ### Bài tập mở rộng Challenge A
 
