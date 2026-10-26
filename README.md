@@ -269,6 +269,14 @@ chạy. Nếu không tìm thấy 9Router đã cài, script tự cài bản 0.5.1
 `data/local-router/` của dự án (lần đầu cần mạng), rồi khởi động dịch vụ.
 Có thể đổi cổng bằng `run_web -AppPort 8001`.
 
+Để dừng cả web và 9Router (gồm tiến trình tray), chạy `stop_web` trong Miniconda
+Prompt hoặc `.\stop_web.cmd` trong PowerShell, từ `BTVN7` hoặc `memory_agent`.
+Lệnh chỉ dừng tiến trình, giữ nguyên memory/lịch sử/checkpoint của A và B cùng
+các file dữ liệu. Chạy lại khi đã dừng cũng được. Nếu dùng cổng web khác, truyền
+cùng cổng: `stop_web -AppPort 8001`. Có thể xem trước bằng `stop_web -WhatIf`.
+Script kiểm tra command line trước khi dừng; nếu cổng thuộc ứng dụng khác sẽ báo
+lỗi và giữ ứng dụng đó. Dùng `run_web` để khởi động lại.
+
 Trên giao diện có hai nút để thử nghiệm nhanh:
 
 - **Xóa trí nhớ**: có xác nhận, chỉ xóa memory dài hạn của user hiện tại (cả mục
