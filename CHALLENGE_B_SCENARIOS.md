@@ -124,12 +124,19 @@ bằng hàm luôn báo lỗi, rồi chạy seed, compact, continuation và đế
 
 ## Dọn memory và reset context trên trang B
 
-- **Xóa memory B**: xác nhận xóa mọi memory dài hạn của B (active và superseded),
-  rồi mở chat B mới với chế độ đang chọn. Chat/archive cũ vẫn giữ để đối chiếu.
+- **Reset tất cả B**: xác nhận xóa mọi memory dài hạn của B (active và superseded),
+  rồi mở chat B mới với chế độ đang chọn, context hiển thị **0 · chưa nạp**.
+  Chat/archive cũ vẫn giữ riêng để đối chiếu; không tự nạp lại vào phiên mới.
 - **Reset context**: xác nhận bỏ active messages và checkpoint của phiên B hiện tại.
   Giữ memory dài hạn, archive, lịch sử hiển thị và usage đã tiêu thụ; có mốc reset
   ngay trong chat. Tin nhắn trước mốc không nằm trong context lượt tiếp theo.
 
 Hai nút nằm dưới ô nhập trên desktop và mobile, bị khóa khi đang xử lý yêu cầu.
 Không gọi model và chỉ tác động namespace B; không xóa dữ liệu Challenge A.
-Context sau reset còn instructions, memory index và tool schemas nên không về 0.
+Context vừa reset hiển thị **0 · chưa nạp**. Dòng **Lượt đầu dự kiến** vẫn ước lượng
+instructions, memory index và tool schemas sẽ được gửi khi nhắn tin. Sau tin đầu
+hoặc nạp phiên mẫu, thanh đo gồm cả phần nền và active messages. System prompt
+và công cụ được gửi lại ở mỗi request; usage chỉ tăng khi thật sự gọi provider.
+Để kiểm chứng: nạp phiên dài → Reset tất cả B → kiểm tra 0/chưa nạp → reload vẫn 0
+→ gửi tin đầu → kiểm tra thanh context và **Xem context gửi model** (Provider).
+Trong Offline, thanh đo chỉ mô phỏng context; usage/API calls vẫn bằng 0.

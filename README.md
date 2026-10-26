@@ -398,11 +398,19 @@ Trang B mặc định **Offline · 0 API**, không cần key/model: compact trí
 cấu trúc và đếm log bằng code. Chọn **Provider .env** khi muốn model thật; không
 có chuyển chế độ tự động. Xem [6 kịch bản và đáp án chuẩn](CHALLENGE_B_SCENARIOS.md).
 
-Hai nút **Xóa memory B** và **Reset context** nằm ngay dưới ô nhập (cả trên mobile):
-xóa memory cần xác nhận, xóa mọi mục active/superseded của riêng B và mở chat B mới;
-reset context bỏ active messages/checkpoint của phiên B hiện tại, giữ archive,
-memory dài hạn và usage đã tiêu thụ. Context sau reset vẫn gồm instructions và tool
-schemas nên không về 0. Cả hai không gọi model, không sửa dữ liệu Challenge A.
+Hai nút **Reset tất cả B** và **Reset context** nằm ngay dưới ô nhập (cả trên mobile):
+reset tất cả cần xác nhận, xóa mọi memory active/superseded của riêng B và mở phiên
+B hoàn toàn mới; reset context chỉ bỏ active messages/checkpoint của phiên B hiện
+tại, giữ archive, memory dài hạn và usage đã tiêu thụ. Cả hai không gọi model,
+không sửa dữ liệu Challenge A; archive/chat cũ vẫn giữ riêng để đối chiếu.
+
+Chat mới và context vừa reset hiển thị **0 · chưa nạp**. Dòng **Lượt đầu dự kiến**
+vẫn ước lượng phần instructions, memory index (nếu có) và tool schemas sẽ được
+gửi kèm tin nhắn đầu tiên. Sau khi gửi hoặc nạp phiên mẫu, thanh context chuyển
+sang ước lượng lượt kế gồm cả phần nền và hội thoại đang dùng. Mỗi request tới
+model đều gửi lại system prompt/công cụ, kể cả ở session mới; không đính kèm
+history/checkpoint của session khác. API giữ `context.estimated_input_tokens`
+là dự báo lượt kế, thêm `loaded_estimated_tokens` (0 khi chưa nạp) và `state`.
 
 Đường API/CLI cũ vẫn dùng `POST /api/compact` với `{"thread_id":"session-1"}`.
 Để dùng B2 qua chat A/CLI, phải cấp `CODE_MODE_LOGS_DIR`; trang B tự cấp thư mục

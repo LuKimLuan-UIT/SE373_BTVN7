@@ -44,6 +44,7 @@ def new_chat(request: ModeRequest):
     return execute(lambda lab: lab.new_chat(request.execution))
 
 
+@router.post("/api/challenge-b/reset")
 @router.post("/api/challenge-b/memory/clear")
 def clear_memory(request: ModeRequest):
     return execute(lambda lab: lab.clear_memory(request.execution))

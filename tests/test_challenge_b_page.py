@@ -37,7 +37,9 @@ def test_page_is_separate_and_has_experiment_controls(page):
     response = request(app, "GET", "/challenge-b")
     assert response.status_code == 200
     assert 'id="compact-btn"' in response.text
-    assert 'id="clear-memory-btn"' in response.text
+    assert 'id="reset-all-btn"' in response.text
+    assert 'id="context-state"' in response.text
+    assert 'id="context-note"' in response.text
     assert 'id="reset-context-btn"' in response.text
     assert 'id="code-prompts"' in response.text
     assert "/api/chat" not in response.text
@@ -129,12 +131,16 @@ def test_chat_api_shows_context_usage_and_persists_timeline(page):
     created = request(app, "POST", "/api/challenge-b/chat/new", json={"execution":"provider"}).json()
     assert created["usage"]["actual_input_tokens"] == 0
     assert created["context"]["estimated_input_tokens"] > 0
+    assert created["context"]["loaded_estimated_tokens"] == 0
+    assert created["context"]["state"] == "not_loaded"
     assert created["context"]["provider_context_limit"] is None
     response = request(app, "POST", "/api/challenge-b/chat", json={"thread_id": created["thread_id"], "message": "Chào"})
     assert response.status_code == 200
     data = response.json()
     assert data["usage"]["actual_input_tokens"] == 123
     assert data["usage"]["actual_output_tokens"] == 8
+    assert data["context"]["state"] == "ready"
+    assert data["context"]["loaded_estimated_tokens"] == data["context"]["estimated_input_tokens"]
     assert data["timeline"][-1]["content"] == "Chào bạn"
     reloaded = request(app, "GET", "/api/challenge-b/chat/" + created["thread_id"]).json()
     assert reloaded == data
@@ -234,7 +240,8 @@ def snapshot(directory):
     return {str(p.relative_to(directory)): p.read_bytes() for p in Path(directory).rglob("*") if p.is_file()}
 
 
-def test_clear_b_memory_removes_all_statuses_without_touching_a_or_archives(page):
+@pytest.mark.parametrize("endpoint", ["/api/challenge-b/memory/clear", "/api/challenge-b/reset"])
+def test_clear_b_memory_removes_all_statuses_without_touching_a_or_archives(page, endpoint):
     app, lab, a = page
     a.chat("a-session", "Lịch sử riêng của A")
     a_before = snapshot(Path(a.settings.memory_dir).parent)
@@ -246,9 +253,9 @@ def test_clear_b_memory_removes_all_statuses_without_touching_a_or_archives(page
     seeded = lab.seed(execution="offline")
     lab.compact(seeded["thread_id"])
     before = {d: snapshot(lab.root / d) for d in ("sessions", "chat-ui", "logs", "results")}
-    assert request(app, "POST", "/api/challenge-b/memory/clear", json={"execution": "invalid"}).status_code == 422
+    assert request(app, "POST", endpoint, json={"execution": "invalid"}).status_code == 422
     assert len(manager.entries(include_superseded=True)) == 2
-    response = request(app, "POST", "/api/challenge-b/memory/clear", json={"execution": "offline"})
+    response = request(app, "POST", endpoint, json={"execution": "offline"})
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] and data["deleted"] == 2
@@ -256,6 +263,10 @@ def test_clear_b_memory_removes_all_statuses_without_touching_a_or_archives(page
     assert fresh["thread_id"] != seeded["thread_id"]
     assert fresh["execution"] == "offline" and fresh["timeline"] == []
     assert fresh["context"]["active"]["serialized_bytes"] == 2
+    assert fresh["context"]["loaded_estimated_tokens"] == 0
+    assert fresh["context"]["state"] == "not_loaded"
+    assert fresh["context"]["estimated_input_tokens"] > 0  # The next input still needs instructions/tools.
+    assert request(app, "GET", "/api/challenge-b/chat/" + fresh["thread_id"]).json() == fresh
     assert fresh["usage"]["requests"] == 0
     assert manager.entries(include_superseded=True) == []
     assert "cookie" not in manager.index_text()
@@ -265,7 +276,7 @@ def test_clear_b_memory_removes_all_statuses_without_touching_a_or_archives(page
         after = snapshot(lab.root / directory)
         assert all(after[name] == content for name, content in files.items())
     assert lab.model.calls == 0
-    assert request(app, "POST", "/api/challenge-b/memory/clear", json={}).json()["deleted"] == 0
+    assert request(app, "POST", endpoint, json={}).json()["deleted"] == 0
 
 
 def test_reset_b_context_persists_empty_active_keeps_archive_memory_and_usage(page):
@@ -291,6 +302,8 @@ def test_reset_b_context_persists_empty_active_keeps_archive_memory_and_usage(pa
     assert lab._working(thread).load() == ([], archive)
     assert after["usage"] == before["usage"]
     assert after["context"]["archive_messages"] == before["context"]["archive_messages"]
+    assert after["context"]["state"] == "not_loaded"
+    assert after["context"]["loaded_estimated_tokens"] == 0
     assert 0 < after["context"]["estimated_input_tokens"] < before["context"]["estimated_input_tokens"]
     assert after["timeline"][:-1] == before["timeline"]
     assert after["timeline"][-1]["kind"] == "reset"
@@ -301,6 +314,7 @@ def test_reset_b_context_persists_empty_active_keeps_archive_memory_and_usage(pa
     assert lab.model.calls == 1
     # The next real graph invocation must not replay archive/checkpoint/UI events.
     continued = lab.send(thread, "NEW_CONTEXT_MARKER")
+    assert continued["context"]["state"] == "ready"
     prompts = json.dumps(continued["timeline"][-1]["prompts"], ensure_ascii=False)
     assert "NEW_CONTEXT_MARKER" in prompts and "Memory B cần giữ" in prompts
     assert "OLD_CONTEXT_MARKER" not in prompts and CHECKPOINT_PREFIX not in prompts
@@ -315,8 +329,12 @@ def test_reset_context_rejects_other_or_missing_sessions_without_changes(page, t
     assert snapshot(lab.root.parent) == before
 
 
-def test_new_b_chat_does_not_send_previous_chat_history_or_checkpoint(page):
+@pytest.mark.parametrize("placement", ["system", "end"])
+def test_new_b_chat_does_not_send_previous_chat_history_or_checkpoint(page, placement):
+    from dataclasses import replace
+    from memory_agent.prompts import BASE_PROMPT
     app, lab, _ = page
+    lab.settings = replace(lab.settings, memory_placement=placement)
     previous = lab.seed(execution="offline")["thread_id"]
     lab.compact(previous)
     lab.send(previous, "OLD_CHAT_ONLY_MARKER")
@@ -324,9 +342,47 @@ def test_new_b_chat_does_not_send_previous_chat_history_or_checkpoint(page):
     lab.model = FakeToolChatModel(responses=[AIMessage(content="Chat riêng")])
     fresh = request(app, "POST", "/api/challenge-b/chat/new", json={"execution": "provider"}).json()
     assert lab._working(fresh["thread_id"]).load() == ([], [])
+    assert fresh["context"]["state"] == "not_loaded"
+    assert fresh["context"]["loaded_estimated_tokens"] == 0
+    assert lab.model.calls == 0
     data = lab.send(fresh["thread_id"], "NEW_CHAT_ONLY_MARKER")
-    prompts = json.dumps(data["timeline"][-1]["prompts"], ensure_ascii=False)
+    first_prompts = data["timeline"][-1]["prompts"]
+    assert first_prompts[0][0]["role"] == "system"
+    assert BASE_PROMPT in first_prompts[0][0]["content"]
+    assert data["context"]["state"] == "ready"
+    assert data["context"]["loaded_estimated_tokens"] > 0
+    prompts = json.dumps(first_prompts, ensure_ascii=False)
     assert "NEW_CHAT_ONLY_MARKER" in prompts
     assert "OLD_CHAT_ONLY_MARKER" not in prompts and CHECKPOINT_PREFIX not in prompts
     assert "DEBUG duplicate" not in prompts and "race.log:7" not in prompts
     assert lab._working(previous).load() == old_context
+    # Every subsequent model request must receive the system instructions again.
+    second = lab.send(fresh["thread_id"], "SECOND_CHAT_MARKER")
+    assert BASE_PROMPT in second["timeline"][-1]["prompts"][0][0]["content"]
+
+
+def test_full_reset_first_send_reloads_system_without_old_memory_or_history(page):
+    from memory_agent.prompts import BASE_PROMPT
+    app, lab, a = page
+    a_before = snapshot(Path(a.settings.memory_dir).parent)
+    manager = MemoryManager(MarkdownMemoryStore(lab.settings.memory_dir, lab.settings.user_id), lab.settings.user_id)
+    manager.remember("auth", "OLD_MEMORY_ONLY_MARKER")
+    previous = lab.seed(execution="offline")["thread_id"]
+    old_context = lab._working(previous).load()
+    reset = request(app, "POST", "/api/challenge-b/reset", json={"execution": "provider"}).json()
+    fresh = reset["chat"]
+    assert reset["deleted"] == 1
+    assert fresh["context"]["state"] == "not_loaded"
+    assert fresh["context"]["loaded_estimated_tokens"] == 0
+    assert fresh["usage"]["requests"] == 0 and lab.model.calls == 0
+    lab.model = FakeToolChatModel(responses=[AIMessage(content="Phiên hoàn toàn mới")])
+    sent = lab.send(fresh["thread_id"], "FRESH_USER_MARKER")
+    prompts = sent["timeline"][-1]["prompts"]
+    assert BASE_PROMPT in prompts[0][0]["content"]
+    serialized = json.dumps(prompts, ensure_ascii=False)
+    assert "FRESH_USER_MARKER" in serialized and "OLD_MEMORY_ONLY_MARKER" not in serialized
+    assert "race.log:7" not in serialized and CHECKPOINT_PREFIX not in serialized
+    assert sent["context"]["state"] == "ready"
+    assert sent["context"]["loaded_estimated_tokens"] > 0
+    assert lab._working(previous).load() == old_context
+    assert snapshot(Path(a.settings.memory_dir).parent) == a_before
