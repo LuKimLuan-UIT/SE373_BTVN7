@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import paths
 from ..challenge_b_lab import ChallengeBLab
@@ -39,6 +39,10 @@ class ChatRequest(B1Request):
     message: str
 
 
+class CompactRequest(B1Request):
+    keep_turns: int = Field(default=2, ge=1, le=50, strict=True)
+
+
 @router.post("/api/challenge-b/chat/new")
 def new_chat(request: ModeRequest):
     return execute(lambda lab: lab.new_chat(request.execution))
@@ -66,9 +70,9 @@ def chat(request: ChatRequest):
 
 
 @router.post("/api/challenge-b/chat/compact")
-def chat_compact(request: B1Request):
+def chat_compact(request: CompactRequest):
     def action(lab):
-        result = lab.compact(request.thread_id)
+        result = lab.compact(request.thread_id, keep_turns=request.keep_turns)
         return {"compact": result, "chat": lab.chat_view(request.thread_id)}
     return execute(action)
 
@@ -117,8 +121,8 @@ def seed(request: ModeRequest):
 
 
 @router.post("/api/challenge-b/b1/compact")
-def compact(request: B1Request):
-    return execute(lambda lab: lab.compact(request.thread_id))
+def compact(request: CompactRequest):
+    return execute(lambda lab: lab.compact(request.thread_id, keep_turns=request.keep_turns))
 
 
 @router.post("/api/challenge-b/b1/continue")

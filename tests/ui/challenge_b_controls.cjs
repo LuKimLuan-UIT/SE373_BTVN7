@@ -30,7 +30,8 @@ const context = vm.createContext({
     calls.push({url, body: JSON.parse(options?.body || 'null')});
     const fresh = chat(url.endsWith('/reset') ? 'bchat-000000000002' : 'bchat-000000000001');
     return {ok: !failed, json: async () => failed ? {detail: 'Test error'} :
-      url.endsWith('/reset') ? {deleted: 2, chat: fresh} : fresh};
+      url.endsWith('/reset') ? {deleted: 2, chat: fresh} :
+      url.endsWith('/chat/compact') ? {compact: {technique:'truncation'}, chat:fresh} : fresh};
   },
 });
 vm.runInContext(script, context);
@@ -95,6 +96,17 @@ const setChat = value => run('current=' + JSON.stringify(value));
   await run('resetAll()');
   assert.equal(element('notice').style.display, 'none');
   assert.equal(element('error').textContent, 'Test error');
+  failed = false;
+  setChat(chat('bchat-000000000001',true));
+  run('setKeepTurns(1)');
+  await run('compact()');
+  assert.equal(calls.at(-1).url, '/api/challenge-b/chat/compact');
+  assert.equal(calls.at(-1).body.keep_turns, 1);
+  const event = run('compactEvent('+JSON.stringify({before:{estimated_tokens:2000},after:{estimated_tokens:500},
+    keep_turns:1,dropped_turns:2,dropped_messages:4,risk:'Mất ràng buộc'})+')');
+  assert.match(event,/Truncation/);
+  assert.match(event,/0 lượt model/);
+  assert.match(event,/Mất ràng buộc/);
   assert(calls.every(c => c.url.startsWith('/api/challenge-b/')));
-  console.log('Page meter, forecasts, reset controls and error handling: PASS');
+  console.log('Page current-context meter, truncation, reset controls and error handling: PASS');
 })().catch(error => {console.error(error); process.exitCode = 1;});

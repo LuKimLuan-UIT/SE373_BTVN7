@@ -1,19 +1,12 @@
 param(
     [string]$CondaEnv = 'SE373',
     [int]$AppPort = 8000,
-    [string]$RouterCliPath = ''
+    [string]$RouterCliPath = '',
+    [switch]$CheckRouterOnly
 )
 
 $ErrorActionPreference = 'Stop'
 $projectDir = Split-Path -Parent $PSScriptRoot
-$pythonExe = Join-Path $env:USERPROFILE "miniconda3/envs/$CondaEnv/python.exe"
-if (-not (Test-Path -LiteralPath $pythonExe)) {
-    throw "Khong tim thay Python cua Conda env $CondaEnv tai $pythonExe"
-}
-$nodeExe = (Get-Command node.exe -ErrorAction Stop).Source
-$logDir = Join-Path $projectDir 'data/service-logs'
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
 function Test-LocalHttp([string]$Url) {
     try {
         $response = Invoke-WebRequest -Uri $Url -TimeoutSec 3 -UseBasicParsing
@@ -21,56 +14,32 @@ function Test-LocalHttp([string]$Url) {
     } catch { return $false }
 }
 
-# A running router can be reused even if its original installation has moved.
+# Select the installed global package before checking a running server.
+. (Join-Path $PSScriptRoot 'router_selection.ps1')
+$router = Resolve-RouterInstallation -OverridePath $RouterCliPath
+$routerCli = $router.CliPath
+Write-Output "9Router CLI: $routerCli"
+Write-Output "9Router installed version: $($router.Version)"
 $routerReady = Test-LocalHttp 'http://127.0.0.1:20128/v1/models'
+if ($routerReady) {
+    $listeners = @(Get-NetTCPConnection -State Listen | Where-Object LocalPort -eq 20128)
+    $processes = @{}
+    foreach ($process in Get-CimInstance Win32_Process) { $processes[[int]$process.ProcessId] = $process }
+    Assert-RunningRouterSource -CliPath $routerCli -Listeners $listeners -Processes $processes
+    Write-Output '9Router dang chay: duong dan tien trinh khop ban da chon.'
+}
+if ($CheckRouterOnly) {
+    Write-Output "Router running: $routerReady. Check only; no services started/stopped."
+    return
+}
+$pythonExe = Join-Path $env:USERPROFILE "miniconda3/envs/$CondaEnv/python.exe"
+if (-not (Test-Path -LiteralPath $pythonExe)) {
+    throw "Khong tim thay Python cua Conda env $CondaEnv tai $pythonExe"
+}
+$nodeExe = (Get-Command node.exe -ErrorAction Stop).Source
+$logDir = Join-Path $projectDir 'data/service-logs'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 if (-not $routerReady) {
-$localRouterDir = Join-Path $projectDir 'data/local-router'
-$localRouterCli = Join-Path $localRouterDir 'node_modules/9router/cli.js'
-$routerCandidates = @($localRouterCli)
-if ($RouterCliPath) {
-    if (-not (Test-Path -LiteralPath $RouterCliPath -PathType Leaf)) {
-        throw "Khong tim thay file RouterCliPath: $RouterCliPath"
-    }
-    $routerCandidates += $RouterCliPath
-}
-$routerCommand = Get-Command 9router.cmd -ErrorAction SilentlyContinue
-if ($routerCommand) {
-    $routerCandidates += Join-Path (Split-Path -Parent $routerCommand.Source) 'node_modules/9router/cli.js'
-}
-if ($env:APPDATA) {
-    $routerCandidates += Join-Path $env:APPDATA 'npm/node_modules/9router/cli.js'
-}
-if ($env:USERPROFILE) {
-    $routerCandidates += Join-Path $env:USERPROFILE 'AppData/Roaming/npm/node_modules/9router/cli.js'
-}
-$routerCli = $routerCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-if (-not $routerCli) {
-    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if ($npmCommand) {
-        $npmOutput = & $npmCommand.Source config get prefix
-        if ($LASTEXITCODE -eq 0) {
-            foreach ($prefixLine in $npmOutput) {
-                if ([string]::IsNullOrWhiteSpace($prefixLine)) { continue }
-                $candidate = Join-Path $prefixLine.Trim() 'node_modules/9router/cli.js'
-                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-                    $routerCli = $candidate
-                    break
-                }
-            }
-        }
-    }
-}
-if (-not $routerCli) {
-    $npmCommand = Get-Command npm.cmd -ErrorAction Stop
-    Write-Output "Khong thay 9Router global. Dang cai ban rieng cho du an tai $localRouterDir ..."
-    & $npmCommand.Source install --prefix $localRouterDir --no-audit --no-fund '9router@0.5.104'
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $localRouterCli -PathType Leaf)) {
-        throw 'Cai 9Router cho du an that bai. Xem loi npm o tren va kiem tra ket noi mang.'
-    }
-    $routerCli = $localRouterCli
-}
-
-    Write-Output "9Router CLI: $routerCli"
     Start-Process -FilePath $nodeExe -ArgumentList @(
         ('"{0}"' -f $routerCli), '--host', '127.0.0.1', '--port', '20128',
         '--tray', '--skip-update', '--no-browser', '--log'
