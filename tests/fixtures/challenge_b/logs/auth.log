@@ -1,0 +1,4 @@
+2026-10-26T10:00:00 ERROR refresh_timeout Refresh request timed out
+2026-10-26T10:00:01 ERROR refresh_timeout Refresh request timed out
+2026-10-26T10:00:02 ERROR invalid_token Token signature rejected
+2026-10-26T10:00:03 INFO heartbeat RAW_LOG_ONLY_MARKER normal heartbeat

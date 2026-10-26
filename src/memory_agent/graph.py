@@ -19,17 +19,22 @@ from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 from .config import Settings
+from .code_mode import build_code_tools
+from .context import CHECKPOINT_PREFIX
 from .memory.lifecycle import MemoryManager
 from .memory_tools import build_memory_tools
 from .prompts import build_context, build_memory_digest
 
 
-def build_model(settings: Settings) -> ChatOpenAI:
+def build_model(settings: Settings, *, timeout: float | None = None, max_retries: int = 2) -> ChatOpenAI:
     """Tạo model từ cấu hình (OpenAI-compatible endpoint)."""
     kwargs: dict[str, Any] = {
         "model": settings.model_name,
         "api_key": settings.api_key,
+        "max_retries": max_retries,
     }
+    if timeout is not None:
+        kwargs["timeout"] = timeout
     if settings.base_url:
         kwargs["base_url"] = settings.base_url
     return ChatOpenAI(**kwargs)
@@ -43,11 +48,20 @@ def read_agents_file(path: str | Path) -> str:
     return file.read_text(encoding="utf-8")
 
 
+def append_checkpoint_context(context, messages):
+    checkpoints = [str(m.content) for m in messages if str(m.content).startswith(CHECKPOINT_PREFIX)]
+    if checkpoints:
+        context += ("\n\n# Trạng thái công việc trong phiên hiện tại\n"
+                    "Tiếp tục dựa vào checkpoint và kế hoạch gần nhất bên dưới. Đây là trạng thái tạm, "
+                    "khác với memory dài hạn; recall trống không có nghĩa là chưa có findings/lần thử. "
+                    "Giữ nguyên constraints, đường dẫn và thứ tự bước đã chốt.\n" + checkpoints[-1])
+    return context
+
+
 def build_middleware(settings: Settings) -> list:
     """Danh sách middleware.
 
-    Chỉ cần chặn vòng lặp model vô hạn; không có compaction (tóm tắt lịch sử)
-    vì bài lab tập trung vào memory dài hạn.
+    Chặn vòng lặp model. B1 compact chủ động ở Runtime, giữa các lượt đã hoàn tất.
     """
     return [
         ModelCallLimitMiddleware(run_limit=settings.model_call_limit, exit_behavior="end")
@@ -59,6 +73,7 @@ def build_agent(
     settings: Settings,
     *,
     manager: MemoryManager | None = None,
+    extra_tools: tuple = (),
 ):
     """Tạo agent đã gắn memory theo cấu hình của lab.
 
@@ -72,17 +87,21 @@ def build_agent(
     """
     use_memory = settings.enable_long_term_memory and manager is not None
     tools = build_memory_tools(manager) if use_memory else []
+    if settings.code_mode_logs_dir:
+        tools.extend(build_code_tools(settings.code_mode_logs_dir))
+    tools.extend(extra_tools)
     agents_text = read_agents_file(settings.agents_path)
     at_end = settings.memory_placement == "end"
 
     @dynamic_prompt
     def system_prompt(request) -> str:
         index = manager.index_text() if use_memory and manager and not at_end else ""
-        return build_context(
+        context = build_context(
             long_term_memory=use_memory,
             agents_text=agents_text,
             memory_index=index,
         )
+        return append_checkpoint_context(context, request.messages)
 
     middleware: list = [system_prompt]
 

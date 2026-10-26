@@ -52,3 +52,6 @@ def delete_session(sessions_dir: str | Path, thread_id: str) -> None:
     path = transcript_path(sessions_dir, thread_id)
     if path.exists():
         path.unlink()
+    # Không để checkpoint/archive cũ làm sống lại session đã xoá.
+    from .context import WorkingContext
+    WorkingContext(sessions_dir, thread_id).path.unlink(missing_ok=True)

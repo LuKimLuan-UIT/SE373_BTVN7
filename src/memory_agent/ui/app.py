@@ -27,6 +27,9 @@ from ..service_control import schedule_restart
 
 app = FastAPI(title="LangGraph Memory Lab")
 
+from .challenge_b import router as challenge_b_router
+app.include_router(challenge_b_router)
+
 _state: dict[str, Any] = {}
 _chat_lock = threading.RLock()
 
@@ -58,6 +61,10 @@ class ChatRequest(BaseModel):
 class RenameRequest(BaseModel):
     thread_id: str
     title: str
+
+
+class CompactRequest(BaseModel):
+    thread_id: str
 
 
 class ClearMemoryRequest(BaseModel):
@@ -107,6 +114,15 @@ def chat(request: ChatRequest) -> dict[str, Any]:
 def trace(thread_id: str):
     runtime = get_runtime()
     return load_trace(runtime.settings.sessions_dir, thread_id)
+
+
+@app.post("/api/compact")
+def compact(request: CompactRequest):
+    with _chat_lock:
+        try:
+            return get_runtime().compact(request.thread_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/sessions/rename")

@@ -364,7 +364,39 @@ uv run python scripts/demo_cli.py context
   → **Progressive disclosure**: index nạp lúc mở session, chi tiết nạp khi `recall`.
 - **Khi quy ước đổi:** `supersede` thay vì append (xem mục 2).
 
-### Bài tập mở rộng
+### Bài tập Challenge B — Context Management
+
+Đã bổ sung B1 compact chủ động bằng checkpoint + archive và B2 Code Mode đọc,
+lọc, tổng hợp nhiều log qua tool `run_code`. Memory của Challenge A tiếp tục dùng
+index/recall hiện có; B2 mặc định tắt và chỉ bật khi cấp `CODE_MODE_LOGS_DIR`.
+
+```powershell
+# Offline, không cần API key
+python scripts/challenge_b_demo.py --output reports/challenge-b
+python -m pytest -q --basetemp=data/pytest-b
+
+# Model đã cấu hình: compact session rồi tiếp tục
+python scripts/demo_cli.py compact --thread session-1
+python scripts/demo_cli.py chat --thread session-1 'Tiếp tục từ bước kế tiếp.'
+```
+
+Mở **http://127.0.0.1:8000/challenge-b** để dùng trang chat riêng: usage tổng phiên,
+context ước lượng, cảnh báo từ 80% ngưỡng demo, nút compact và checkpoint trước/sau
+ngay trong hội thoại. Menu có phiên dài mẫu B1, câu hỏi log B2 và native baseline
+trong đoạn chat riêng. Session/memory B nằm trong `data/challenge-b`, tách khỏi A.
+Ngưỡng demo mặc định 8.000 là ngân sách quan sát, không phải context limit model.
+
+Trang B mặc định **Offline · 0 API**, không cần key/model: compact trích xuất có
+cấu trúc và đếm log bằng code. Chọn **Provider .env** khi muốn model thật; không
+có chuyển chế độ tự động. Xem [6 kịch bản và đáp án chuẩn](CHALLENGE_B_SCENARIOS.md).
+
+Đường API/CLI cũ vẫn dùng `POST /api/compact` với `{"thread_id":"session-1"}`.
+Để dùng B2 qua chat A/CLI, phải cấp `CODE_MODE_LOGS_DIR`; trang B tự cấp thư mục
+fixture giả lập riêng. Không cần thay `.env` để thử trang B.
+Xem [báo cáo B, cách chạy và giới hạn](CHALLENGE_B_REPORT.md) cùng
+[lý do chọn thuật toán compact](CONTEXT_COMPACTION_DECISION.md).
+
+### Bài tập mở rộng Challenge A
 
 Web hiện là chat tự nhiên: nhập nội dung, **+ Session mới** để đổi phiên; nút
 **Bằng chứng** mở tool/context và **Chế độ chụp ảnh** hiện quyết định ghi cùng

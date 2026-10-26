@@ -1,0 +1,225 @@
+"""Separate page, namespace isolation and real graph/tool calls with an offline model."""
+import importlib
+import json
+
+import pytest
+from langchain_core.messages import AIMessage
+
+from memory_agent.challenge_b_lab import ChallengeBLab
+from memory_agent.context import CHECKPOINT_PREFIX
+from memory_agent.graph import build_agent
+from memory_agent.runtime import Runtime
+from memory_agent.sessions import list_sessions
+from tests.test_agent_memory import FakeToolChatModel, make_runtime, make_settings, tool_call
+from tests.test_challenge_b import demo
+from tests.test_maintenance import request
+
+
+@pytest.fixture
+def page(tmp_path, monkeypatch):
+    app = importlib.import_module("memory_agent.ui.app")
+    routes = importlib.import_module("memory_agent.ui.challenge_b")
+    a = make_runtime(tmp_path / "a", FakeToolChatModel(responses=[AIMessage(content="A")]))
+    a.manager.remember("auth", "Quy ước riêng của A")
+    model = FakeToolChatModel(responses=[AIMessage(content=json.dumps(demo.CHECKPOINT, ensure_ascii=False)),
+                                         AIMessage(content="Thêm test tests/test_refresh.py; không log token; timeout 30s không hiệu quả.")])
+    lab = ChallengeBLab(a.settings, tmp_path / "b", model=model)
+    monkeypatch.setattr(app, "_state", {"runtime": a})
+    monkeypatch.setattr(routes, "_lab", lab)
+    return app, lab, a
+
+
+def test_page_is_separate_and_has_experiment_controls(page):
+    app, _, _ = page
+    response = request(app, "GET", "/challenge-b")
+    assert response.status_code == 200
+    assert 'id="compact-btn"' in response.text
+    assert 'id="code-prompts"' in response.text
+    assert "/api/chat" not in response.text
+    assert 'href="/challenge-b"' in request(app, "GET", "/").text
+    status = request(app, "GET", "/api/challenge-b/status").json()
+    assert status["namespace"] == "challenge-b-lab"
+    assert status["expected_counts"]["refresh_timeout"] == 400
+
+
+def test_b1_flow_does_not_change_a_memory_or_sessions(page):
+    app, lab, a = page
+    seeded = request(app, "POST", "/api/challenge-b/b1/seed", json={"execution":"provider"}).json()
+    payload = {"thread_id": seeded["thread_id"]}
+    assert request(app, "POST", "/api/challenge-b/b1/continue", json=payload).status_code == 400
+    cp = request(app, "POST", "/api/challenge-b/b1/compact", json=payload)
+    assert cp.status_code == 200
+    assert cp.json()["archive_preserved"]
+    assert cp.json()["after"]["estimated_tokens"] < cp.json()["before"]["estimated_tokens"]
+    continued = request(app, "POST", "/api/challenge-b/b1/continue", json=payload)
+    assert continued.status_code == 200
+    assert continued.json()["raw_debug_absent"]
+    assert "tests/test_refresh.py" in continued.json()["reply"]
+    assert list_sessions(a.settings.sessions_dir) == []
+    assert "Quy ước riêng của A" in a.manager.index_text()
+    assert lab.settings.sessions_dir != a.settings.sessions_dir
+    assert lab.settings.memory_dir != a.settings.memory_dir
+    assert {"b1-seed", "b1-compact", "b1-continuation"}.issubset(lab.results())
+
+
+def test_b2_code_and_baseline_are_measured_and_keep_data_separate(page):
+    app, lab, a = page
+    lab.model = demo.DemoModel(mode="code")
+    code = request(app, "POST", "/api/challenge-b/b2/code", json={})
+    assert code.status_code == 200
+    data = code.json()
+    assert data["golden_counts_match"]
+    assert data["raw_marker_in_requests"] is False
+    assert data["measurement"]["requests"] == 2
+    assert data["findings"]["files_scanned"] == 4
+    lab.model = demo.DemoModel(mode="native")
+    native = request(app, "POST", "/api/challenge-b/b2/native", json={}).json()
+    assert native["raw_marker_in_requests"] is True
+    assert native["measurement"]["requests"] == 2
+    assert all(e["kind"] == "call" for e in native["events"])
+    assert list_sessions(a.settings.sessions_dir) == []
+
+
+@pytest.mark.parametrize("thread", ["../a", "session-1", "b1-invalid", "b1-000000000000"])
+def test_b_cannot_reference_a_or_missing_session(page, thread):
+    app, _, _ = page
+    assert request(app, "POST", "/api/challenge-b/b1/compact", json={"thread_id": thread}).status_code == 400
+
+
+def test_bad_mode_and_provider_errors_are_clear_and_redacted(page):
+    app, lab, _ = page
+    assert request(app, "POST", "/api/challenge-b/b2/arbitrary", json={}).status_code == 400
+    class Broken(FakeToolChatModel):
+        def _generate(self, *args, **kwargs):
+            raise RuntimeError("credential-do-not-show")
+    lab.model = Broken()
+    seeded = request(app, "POST", "/api/challenge-b/b1/seed", json={"execution":"provider"}).json()
+    response = request(app, "POST", "/api/challenge-b/b1/compact", json={"thread_id": seeded["thread_id"]})
+    assert response.status_code == 502
+    assert "RuntimeError" in response.text
+    assert "credential-do-not-show" not in response.text
+
+
+def test_recent_plan_is_kept_and_checkpoint_is_in_main_system_prompt(tmp_path):
+    seen = []
+    class Recording(FakeToolChatModel):
+        def _generate(self, messages, *args, **kwargs):
+            seen.extend(messages)
+            return super()._generate(messages, *args, **kwargs)
+    lab = ChallengeBLab(make_settings(tmp_path), tmp_path / "b", model=demo.DemoModel(mode="compact"))
+    thread = lab.seed()["thread_id"]
+    cp = lab.compact(thread)
+    assert any("Tăng timeout 30s không hiệu quả" in str(m["content"]) for m in cp["active_preview"])
+    lab.model = Recording(responses=[AIMessage(content="Tiếp tục")])
+    lab.continue_task(thread)
+    assert CHECKPOINT_PREFIX in seen[0].content
+    assert "tests/test_refresh.py" in seen[0].content
+    assert "recall trống" in seen[0].content
+
+
+def test_chat_api_shows_context_usage_and_persists_timeline(page):
+    app, lab, _ = page
+    lab.model = FakeToolChatModel(responses=[AIMessage(content="Chào bạn", usage_metadata={
+        "input_tokens": 123, "output_tokens": 8, "total_tokens": 131})])
+    created = request(app, "POST", "/api/challenge-b/chat/new", json={"execution":"provider"}).json()
+    assert created["usage"]["actual_input_tokens"] == 0
+    assert created["context"]["estimated_input_tokens"] > 0
+    assert created["context"]["provider_context_limit"] is None
+    response = request(app, "POST", "/api/challenge-b/chat", json={"thread_id": created["thread_id"], "message": "Chào"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["usage"]["actual_input_tokens"] == 123
+    assert data["usage"]["actual_output_tokens"] == 8
+    assert data["timeline"][-1]["content"] == "Chào bạn"
+    reloaded = request(app, "GET", "/api/challenge-b/chat/" + created["thread_id"]).json()
+    assert reloaded == data
+
+
+def test_chat_compact_records_usage_and_before_after_event(page):
+    app, lab, _ = page
+    lab.model = FakeToolChatModel(responses=[AIMessage(content=json.dumps(demo.CHECKPOINT, ensure_ascii=False),
+        usage_metadata={"input_tokens": 500, "output_tokens": 100, "total_tokens": 600})])
+    seed = request(app, "POST", "/api/challenge-b/b1/seed", json={"execution":"provider"}).json()
+    before = request(app, "GET", "/api/challenge-b/chat/" + seed["thread_id"]).json()
+    data = request(app, "POST", "/api/challenge-b/chat/compact", json={"thread_id": seed["thread_id"]}).json()
+    assert data["chat"]["context"]["estimated_input_tokens"] < before["context"]["estimated_input_tokens"]
+    assert data["chat"]["timeline"][-1]["kind"] == "compact"
+    assert data["chat"]["usage"]["actual_input_tokens"] == 500
+    assert data["chat"]["usage"]["actual_output_tokens"] == 100
+
+
+def test_failed_compact_still_counts_usage_without_mutating_context(page):
+    app, lab, _ = page
+    lab.model = FakeToolChatModel(responses=[AIMessage(content="not json", usage_metadata={
+        "input_tokens": 50, "output_tokens": 3, "total_tokens": 53})])
+    seed = request(app, "POST", "/api/challenge-b/b1/seed", json={"execution":"provider"}).json()
+    before = lab.chat_view(seed["thread_id"])
+    response = request(app, "POST", "/api/challenge-b/chat/compact", json={"thread_id": seed["thread_id"]})
+    assert response.status_code == 400
+    after = lab.chat_view(seed["thread_id"])
+    assert after["context"] == before["context"]
+    assert after["usage"]["actual_input_tokens"] == 50
+    assert after["usage"]["last"]["kind"] == "compact-failed"
+
+
+def test_chat_missing_provider_usage_is_not_shown_as_zero(page):
+    app, lab, _ = page
+    lab.model = FakeToolChatModel(responses=[AIMessage(content="No usage")])
+    created = lab.new_chat()
+    data = lab.send(created["thread_id"], "hello")
+    assert data["usage"]["actual_input_tokens"] is None
+    assert data["usage"]["actual_output_tokens"] is None
+    assert data["usage"]["estimated_input_tokens"] > 0
+
+
+def test_offline_flow_never_builds_or_calls_model_and_needs_no_key(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from memory_agent import challenge_b_lab
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Offline must never build a provider model")
+    monkeypatch.setattr(challenge_b_lab, "build_model", forbidden)
+    settings = replace(make_settings(tmp_path), api_key="", model_name="")
+    lab = ChallengeBLab(settings, tmp_path / "offline")
+    seed = lab.seed(execution="offline")
+    before = lab.chat_view(seed["thread_id"])
+    cp = lab.compact(seed["thread_id"])
+    assert "tests/test_refresh.py" in cp["checkpoint"]["next_action"]
+    assert cp["checkpoint"]["next_action"].index("test") < cp["checkpoint"]["next_action"].index("session lock")
+    assert cp["after"]["estimated_tokens"] < cp["before"]["estimated_tokens"]
+    assert cp["compaction_requests"] == 0
+    data = lab.send(seed["thread_id"], "Tiếp tục: nêu bước kế tiếp và constraints, cách đã thử")
+    assert "timeout" in data["timeline"][-1]["content"]
+    assert data["usage"]["requests"] == 0
+    assert data["usage"]["actual_input_tokens"] == 0
+    assert data["usage"]["actual_output_tokens"] == 0
+    assert data["context"]["estimated_input_tokens"] < before["context"]["estimated_input_tokens"]
+    chat = lab.new_chat(execution="offline")
+    logs = lab.send(chat["thread_id"], demo.QUESTION)
+    assert "400 lần" in logs["timeline"][-1]["content"]
+    assert "auth.log:1" in logs["timeline"][-1]["content"]
+    assert "RAW_LOG_ONLY_MARKER" not in json.dumps(logs["timeline"][-1]["events"])
+    assert lab.model is None
+
+
+def test_api_defaults_to_offline_without_calling_injected_model(page):
+    app, lab, _ = page
+    model = lab.model
+    new = request(app, "POST", "/api/challenge-b/chat/new", json={}).json()
+    assert new["execution"] == "offline"
+    data = request(app, "POST", "/api/challenge-b/chat", json={"thread_id":new["thread_id"], "message":demo.QUESTION}).json()
+    assert data["usage"]["requests"] == 0
+    assert model.calls == 0
+    assert request(app, "POST", "/api/challenge-b/chat/new", json={"execution":"unknown"}).status_code == 422
+
+
+def test_offline_config_load_does_not_require_model_or_key(tmp_path, monkeypatch):
+    from memory_agent import config, paths
+    env = tmp_path / ".env"
+    env.write_text("", encoding="utf-8")
+    monkeypatch.setattr(paths, "ENV_PATH", env)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    assert config.load_settings()[0] is None
+    settings, missing = config.load_settings(offline=True)
+    assert settings is not None and missing == []
+    assert settings.api_key == "" and settings.model_name == ""

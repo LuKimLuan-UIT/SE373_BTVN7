@@ -57,6 +57,9 @@ class Settings:
     # Giới hạn số lần gọi model trong một lượt chat.
     model_call_limit: int
 
+    # Capability B2: chỉ cấp thư mục log cụ thể; mặc định tắt để giữ Challenge A.
+    code_mode_logs_dir: str | None = None
+
 
 def _flag(name: str, default: bool = False) -> bool:
     raw = _env(name).lower()
@@ -75,7 +78,7 @@ def _int(name: str, default: int) -> int:
         return default
 
 
-def load_settings() -> tuple[Settings | None, list[str]]:
+def load_settings(*, offline: bool = False) -> tuple[Settings | None, list[str]]:
     """Đọc cấu hình. Trả về ``(settings, [])`` khi đủ, ngược lại ``(None, [biến thiếu])``.
 
     Thứ tự ưu tiên: biến môi trường của OS > `.env`.
@@ -89,7 +92,7 @@ def load_settings() -> tuple[Settings | None, list[str]]:
         for name, value in (("OPENAI_API_KEY", api_key), ("MODEL_NAME", model_name))
         if not value
     ]
-    if missing:
+    if missing and not offline:
         return None, missing
 
     paths.DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,6 +111,7 @@ def load_settings() -> tuple[Settings | None, list[str]]:
             enable_long_term_memory=_flag("MEMORY_LONG_TERM", default=True),
             memory_placement=_env("MEMORY_PLACEMENT").lower() or "system",
             model_call_limit=_int("MODEL_CALL_LIMIT", 8),
+            code_mode_logs_dir=_env("CODE_MODE_LOGS_DIR") or None,
         ),
         [],
     )

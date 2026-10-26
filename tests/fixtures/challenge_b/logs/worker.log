@@ -1,0 +1,4 @@
+2026-10-26T10:00:04 ERROR refresh_timeout Refresh request timed out
+2026-10-26T10:00:05 ERROR db_connection Database connection refused
+2026-10-26T10:00:06 ERROR refresh_timeout Refresh request timed out
+2026-10-26T10:00:07 WARN queue_delay Queue delay observed

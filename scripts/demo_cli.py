@@ -13,6 +13,7 @@ Ví dụ:
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -80,6 +81,16 @@ def cmd_context(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compact(args: argparse.Namespace) -> int:
+    runtime = build_runtime(_settings_or_exit())
+    try:
+        print(json.dumps(runtime.compact(args.thread), ensure_ascii=False, indent=2))
+        return 0
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+
+
 def cmd_reset(args: argparse.Namespace) -> int:
     settings = _settings_or_exit()
     for session in list_sessions(settings.sessions_dir):
@@ -122,6 +133,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p_context = sub.add_parser("context", help="in phần context sẽ inject vào model")
     p_context.set_defaults(func=cmd_context)
+
+    p_compact = sub.add_parser("compact", help="B1: checkpoint active context, giữ archive")
+    p_compact.add_argument("--thread", required=True)
+    p_compact.set_defaults(func=cmd_compact)
 
     p_forget = sub.add_parser("forget", help="quên 1 mục memory theo key")
     p_forget.add_argument("--key", required=True)

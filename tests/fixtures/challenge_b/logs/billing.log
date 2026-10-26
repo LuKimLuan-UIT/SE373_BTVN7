@@ -1,0 +1,3 @@
+2026-10-26T10:00:08 ERROR db_connection Database connection refused
+2026-10-26T10:00:09 ERROR refresh_timeout Refresh request timed out
+2026-10-26T10:00:10 ERROR db_connection Database connection refused

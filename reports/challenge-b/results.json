@@ -1,0 +1,122 @@
+{
+  "mode": "offline scripted model; not real-provider validation",
+  "b1": {
+    "checkpoint": {
+      "goal": "Điều tra refresh-token race condition",
+      "current_state": "Lỗi 401 khi hai request refresh đồng thời vẫn chưa được sửa.",
+      "constraints": [
+        "Giữ nguyên API /refresh và không log token."
+      ],
+      "findings": [
+        "auth.py:184 hai request đọc cùng refresh token; race.log:7 xác nhận interleaving."
+      ],
+      "failed_attempts": [
+        "Tăng timeout lên 30s không giảm lỗi 401; loại trừ timeout."
+      ],
+      "files": [
+        "auth.py:184",
+        "tests/test_refresh.py",
+        "race.log:7"
+      ],
+      "next_action": "Thêm test hai request refresh đồng thời trong tests/test_refresh.py, rồi kiểm tra lock theo session.",
+      "open_questions": [
+        "Chưa xác nhận lock theo session có giải quyết race giữa các process hay không."
+      ]
+    },
+    "before": {
+      "serialized_bytes": 57346,
+      "estimated_tokens": 14337,
+      "method": "ceil(serialized UTF-8 bytes / 4); heuristic, not provider usage"
+    },
+    "after": {
+      "serialized_bytes": 1751,
+      "estimated_tokens": 438,
+      "method": "ceil(serialized UTF-8 bytes / 4); heuristic, not provider usage"
+    },
+    "archive_messages": 5,
+    "active_messages": 4,
+    "compaction_usage": [],
+    "compaction_requests": 1,
+    "compaction_input_estimate": 15458,
+    "continuation": "Thêm test hai request refresh đồng thời trong tests/test_refresh.py, rồi kiểm tra lock theo session.",
+    "continuation_passed": true,
+    "archive_preserved": true,
+    "reduction_percent_estimated": 96.94,
+    "continuation_input": {
+      "requests": 1,
+      "estimated_input_tokens": 2094,
+      "actual_input_tokens": null,
+      "method": "ceil(JSON messages incl tool calls + tool schemas UTF-8 bytes / 4), each request",
+      "usage_field": null
+    },
+    "cost_note": "Compaction input is an EXTRA request, reported separately; context reduction is not total-cost reduction."
+  },
+  "b2": {
+    "question": "Quét tất cả file log: loại lỗi nào xuất hiện nhiều nhất, chính xác bao nhiêu lần, ở những file nào? Đưa bằng chứng file và số dòng.",
+    "fixture_scale": 80,
+    "measurements": {
+      "native": {
+        "requests": 2,
+        "estimated_input_tokens": 21020,
+        "actual_input_tokens": null,
+        "method": "ceil(JSON messages incl tool calls + tool schemas UTF-8 bytes / 4), each request",
+        "usage_field": null
+      },
+      "code": {
+        "requests": 2,
+        "estimated_input_tokens": 3922,
+        "actual_input_tokens": null,
+        "method": "ceil(JSON messages incl tool calls + tool schemas UTF-8 bytes / 4), each request",
+        "usage_field": null
+      }
+    },
+    "answers": {
+      "native": {
+        "type": "refresh_timeout",
+        "count": 400,
+        "files": [
+          "auth.log",
+          "billing.log",
+          "worker.log"
+        ],
+        "evidence": [
+          {
+            "file": "auth.log",
+            "line": 1,
+            "message": "Refresh request timed out"
+          },
+          {
+            "file": "billing.log",
+            "line": 2,
+            "message": "Refresh request timed out"
+          }
+        ]
+      },
+      "code": {
+        "type": "refresh_timeout",
+        "count": 400,
+        "files": [
+          "auth.log",
+          "billing.log",
+          "worker.log"
+        ],
+        "files_total": 3,
+        "evidence": [
+          {
+            "file": "auth.log",
+            "line": 1,
+            "message": "Refresh request timed out"
+          },
+          {
+            "file": "billing.log",
+            "line": 2,
+            "message": "Refresh request timed out"
+          }
+        ]
+      }
+    },
+    "correct": true,
+    "raw_log_absent_from_code_requests": true,
+    "reduction_percent_estimated": 81.34
+  }
+}

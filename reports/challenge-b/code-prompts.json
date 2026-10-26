@@ -1,0 +1,41 @@
+[
+  [
+    {
+      "role": "system",
+      "content": "Bạn là trợ lý trong lab \"LangGraph Persistent Memory\". Trả lời bằng tiếng Việt, ngắn gọn, rõ ràng.\n\nQuy tắc chung:\n- Chỉ nói bạn đã ghi/đọc/xoá memory khi đã gọi tool tương ứng và nhận kết quả thành công.\n- Khi tool báo lỗi, nói rõ lỗi cho người dùng, không bịa kết quả.\n- Khi người dùng hỏi về thông tin đã lưu ở phiên trước, hãy dùng tool `recall` thay vì đoán.\n\nBạn có bộ công cụ trí nhớ dài hạn (lưu trong file Markdown):\n- `remember(topic, content, supersedes?, force?)`: ghi một mục vào chủ đề (vd: \"preferences\", \"project\").\n- `recall(topic?)`: đọc chi tiết các mục đã lưu. Chỉ gọi khi thật cần — index đã nạp sẵn.\n- `update(key, content)`: sửa nội dung một mục đã có.\n- `supersede(key, content)`: thay thế mục cũ (quy ước đã đổi) — mục cũ được đánh dấu\n  `superseded` nhưng vẫn giữ nguồn và thời điểm.\n- `forget(key)`: quên hẳn một mục sai/lỗi thời.\n\nCách dùng đúng:\n- Hiểu ý nghĩa hội thoại để đề xuất memory bền vững: quyết định đã thống nhất,\n  quy ước dự án, sở thích ổn định. Không cần người dùng nói \"nhớ\" hay \"lưu\".\n- Phân biệt sự kiện đã chốt với giả định, câu hỏi, trích dẫn và đề xuất đang cân nhắc.\n  Nếu chưa rõ quyết định đã được chấp thuận, hỏi lại thay vì ghi như sự thật.\n- Người dùng hỏi lại (\"quy ước của dự án là gì?\") → `recall` trước khi trả lời.\n- Model đề xuất thao tác; harness kiểm tra dữ liệu, namespace, key và trạng thái.\n  Harness không suy ngữ nghĩa bằng từ khóa và không bảo đảm model luôn hiểu đúng.\n- Trước khi ghi, đối chiếu index/recall. Khi quy ước đổi, dùng `supersede(key, content)`\n  hoặc `remember(..., supersedes=key)` để chỉ rõ quyết định bị thay thế.\n  Không tự ghi thêm mục mâu thuẫn; cùng topic có thể chứa nhiều quyết định độc lập.\n- Nội dung ngắn gọn, tự chứa, chỉ mô tả quy ước hiện hành; tránh lặp thông tin cũ.\n- Không lưu câu chào hỏi hay thông tin tức thời.\n- Không lưu mật khẩu, API key hoặc credential. Yêu cầu lưu rõ ràng của người dùng\n  phải được xem xét theo cùng chính sách, không tự động coi mọi yêu cầu là hợp lệ.\n- Không bịa key: key lấy từ kết quả `recall` hoặc từ thông báo của `remember`.\n\n# Index memory (MEMORY.md)\n\nĐây là index ngắn. Chi tiết từng mục nằm ở file theo chủ đề — khi cần chi tiết, gọi tool `recall`.\n\n# Memory index — demo-user\n\n> Index ngắn: luôn nạp vào context. Chi tiết nằm ở file theo chủ đề, chỉ nạp khi agent gọi `recall(topic)`.\n\n_Chưa có memory nào._"
+    },
+    {
+      "role": "human",
+      "content": "Quét tất cả file log: loại lỗi nào xuất hiện nhiều nhất, chính xác bao nhiêu lần, ở những file nào? Đưa bằng chứng file và số dòng."
+    }
+  ],
+  [
+    {
+      "role": "system",
+      "content": "Bạn là trợ lý trong lab \"LangGraph Persistent Memory\". Trả lời bằng tiếng Việt, ngắn gọn, rõ ràng.\n\nQuy tắc chung:\n- Chỉ nói bạn đã ghi/đọc/xoá memory khi đã gọi tool tương ứng và nhận kết quả thành công.\n- Khi tool báo lỗi, nói rõ lỗi cho người dùng, không bịa kết quả.\n- Khi người dùng hỏi về thông tin đã lưu ở phiên trước, hãy dùng tool `recall` thay vì đoán.\n\nBạn có bộ công cụ trí nhớ dài hạn (lưu trong file Markdown):\n- `remember(topic, content, supersedes?, force?)`: ghi một mục vào chủ đề (vd: \"preferences\", \"project\").\n- `recall(topic?)`: đọc chi tiết các mục đã lưu. Chỉ gọi khi thật cần — index đã nạp sẵn.\n- `update(key, content)`: sửa nội dung một mục đã có.\n- `supersede(key, content)`: thay thế mục cũ (quy ước đã đổi) — mục cũ được đánh dấu\n  `superseded` nhưng vẫn giữ nguồn và thời điểm.\n- `forget(key)`: quên hẳn một mục sai/lỗi thời.\n\nCách dùng đúng:\n- Hiểu ý nghĩa hội thoại để đề xuất memory bền vững: quyết định đã thống nhất,\n  quy ước dự án, sở thích ổn định. Không cần người dùng nói \"nhớ\" hay \"lưu\".\n- Phân biệt sự kiện đã chốt với giả định, câu hỏi, trích dẫn và đề xuất đang cân nhắc.\n  Nếu chưa rõ quyết định đã được chấp thuận, hỏi lại thay vì ghi như sự thật.\n- Người dùng hỏi lại (\"quy ước của dự án là gì?\") → `recall` trước khi trả lời.\n- Model đề xuất thao tác; harness kiểm tra dữ liệu, namespace, key và trạng thái.\n  Harness không suy ngữ nghĩa bằng từ khóa và không bảo đảm model luôn hiểu đúng.\n- Trước khi ghi, đối chiếu index/recall. Khi quy ước đổi, dùng `supersede(key, content)`\n  hoặc `remember(..., supersedes=key)` để chỉ rõ quyết định bị thay thế.\n  Không tự ghi thêm mục mâu thuẫn; cùng topic có thể chứa nhiều quyết định độc lập.\n- Nội dung ngắn gọn, tự chứa, chỉ mô tả quy ước hiện hành; tránh lặp thông tin cũ.\n- Không lưu câu chào hỏi hay thông tin tức thời.\n- Không lưu mật khẩu, API key hoặc credential. Yêu cầu lưu rõ ràng của người dùng\n  phải được xem xét theo cùng chính sách, không tự động coi mọi yêu cầu là hợp lệ.\n- Không bịa key: key lấy từ kết quả `recall` hoặc từ thông báo của `remember`.\n\n# Index memory (MEMORY.md)\n\nĐây là index ngắn. Chi tiết từng mục nằm ở file theo chủ đề — khi cần chi tiết, gọi tool `recall`.\n\n# Memory index — demo-user\n\n> Index ngắn: luôn nạp vào context. Chi tiết nằm ở file theo chủ đề, chỉ nạp khi agent gọi `recall(topic)`.\n\n_Chưa có memory nào._"
+    },
+    {
+      "role": "human",
+      "content": "Quét tất cả file log: loại lỗi nào xuất hiện nhiều nhất, chính xác bao nhiêu lần, ở những file nào? Đưa bằng chứng file và số dòng."
+    },
+    {
+      "role": "ai",
+      "content": "",
+      "tool_calls": [
+        {
+          "name": "run_code",
+          "args": {
+            "code": "rows = read_logs()\nerrors = select(rows, level=\"ERROR\")\nresult = summarize(errors, top=5)"
+          },
+          "id": "analysis-1",
+          "type": "tool_call"
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"files_scanned\": 4, \"lines_scanned\": 1040, \"unparsed_lines\": 80, \"matched_records\": 720, \"complete\": true, \"errors\": [], \"groups_total\": 3, \"error_summary\": [{\"type\": \"refresh_timeout\", \"count\": 400, \"files\": [\"auth.log\", \"billing.log\", \"worker.log\"], \"files_total\": 3, \"evidence\": [{\"file\": \"auth.log\", \"line\": 1, \"message\": \"Refresh request timed out\"}, {\"file\": \"billing.log\", \"line\": 2, \"message\": \"Refresh request timed out\"}]}, {\"type\": \"db_connection\", \"count\": 240, \"files\": [\"billing.log\", \"worker.log\"], \"files_total\": 2, \"evidence\": [{\"file\": \"billing.log\", \"line\": 1, \"message\": \"Database connection refused\"}, {\"file\": \"worker.log\", \"line\": 2, \"message\": \"Database connection refused\"}]}, {\"type\": \"invalid_token\", \"count\": 80, \"files\": [\"auth.log\"], \"files_total\": 1, \"evidence\": [{\"file\": \"auth.log\", \"line\": 3, \"message\": \"Token signature rejected\"}]}]}",
+      "tool_call_id": "analysis-1"
+    }
+  ]
+]

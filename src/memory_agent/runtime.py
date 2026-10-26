@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 
 from .config import Settings
+from .context import WorkingContext
 from .graph import build_agent, build_model, read_agents_file
 from .memory.history import load_history, write_history
 from .memory.lifecycle import MemoryManager
@@ -28,6 +29,14 @@ class Runtime:
     store: MarkdownMemoryStore
     manager: MemoryManager
     agent: Any
+    model: Any = None
+
+    def compact(self, thread_id: str, *, model=None) -> dict[str, Any]:
+        """Compact chủ động giữa các lượt; JSON/schema lỗi không thay context."""
+        return WorkingContext(self.settings.sessions_dir, thread_id).compact(
+            model if model is not None else (self.model or build_model(self.settings)),
+            instructions=injected_context(self.settings, self.manager),
+        )
 
     def chat(self, thread_id: str, message: str) -> str:
         """Gửi 1 tin nhắn vào session và trả về câu trả lời.
@@ -49,16 +58,26 @@ class Runtime:
         # Ghi nhớ nguồn của mục memory là session hiện tại.
         self.manager.current_source = thread_id
 
-        history = load_history(self.settings.sessions_dir, thread_id)
-        result = self.agent.invoke(
-            {"messages": [*history, HumanMessage(content=message)]},
-            config={"configurable": {"thread_id": thread_id}, "callbacks": [recorder]},
-        )
+        working = WorkingContext(self.settings.sessions_dir, thread_id)
+        history, archive = working.load()
+        try:
+            result = self.agent.invoke(
+                {"messages": [*history, HumanMessage(content=message)]},
+                config={"configurable": {"thread_id": thread_id}, "callbacks": [recorder]},
+            )
+        except Exception as exc:
+            exc.recorded_prompts, exc.recorded_usage = recorder.prompts, recorder.usage
+            raise
         answer = result["messages"][-1].content
 
         title = next((m.content for m in result["messages"] if m.type == "human"), thread_id)
         title = str(title)[:40]
-        write_history(self.settings.sessions_dir, thread_id, result["messages"], title=title)
+        new_messages = result["messages"][len(history):]
+        archive = [*archive, *new_messages]
+        # JSON sidecar lưu cả tool/system messages, transcript Markdown vẫn cho UI/A.
+        if working.path.exists() or self.settings.code_mode_logs_dir:
+            working.save(result["messages"], archive)
+        write_history(self.settings.sessions_dir, thread_id, archive, title=title)
         rename_session(self.settings.sessions_dir, thread_id, title)
         events = []
         for item in result["messages"][len(history) + 1:]:
@@ -74,6 +93,7 @@ class Runtime:
             "at": datetime.now(timezone.utc).isoformat(),
             "elapsed_seconds": round(perf_counter() - started, 2),
             "history_messages": len(history), "events": events,
+            "archive_messages": len(archive),
             "memory_before": before, "memory_after": self.manager.index_text(),
             "entries": [entry.to_dict() for entry in self.manager.entries()],
             "entries_before": entries_before,
@@ -97,8 +117,9 @@ def build_runtime(settings: Settings) -> Runtime:
     """Dựng runtime đầy đủ."""
     store = MarkdownMemoryStore(settings.memory_dir, settings.user_id)
     manager = MemoryManager(store, settings.user_id)
-    agent = build_agent(build_model(settings), settings, manager=manager)
-    return Runtime(settings=settings, store=store, manager=manager, agent=agent)
+    model = build_model(settings)
+    agent = build_agent(model, settings, manager=manager)
+    return Runtime(settings=settings, store=store, manager=manager, agent=agent, model=model)
 
 
 def runtime_from_settings(settings: Settings) -> Runtime:

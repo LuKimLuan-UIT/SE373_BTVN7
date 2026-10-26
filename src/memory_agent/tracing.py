@@ -15,9 +15,15 @@ class PromptRecorder(BaseCallbackHandler):
 
     def on_chat_model_start(self, serialized, messages, **kwargs):
         for batch in messages:
-            self.prompts.append([
-                {"role": m.type, "content": m.content} for m in batch
-            ])
+            prompt = []
+            for m in batch:
+                item = {"role": m.type, "content": m.content}
+                if getattr(m, "tool_calls", None):
+                    item["tool_calls"] = m.tool_calls
+                if getattr(m, "tool_call_id", None):
+                    item["tool_call_id"] = m.tool_call_id
+                prompt.append(item)
+            self.prompts.append(prompt)
 
     def on_llm_end(self, response, **kwargs):
         for batch in response.generations:

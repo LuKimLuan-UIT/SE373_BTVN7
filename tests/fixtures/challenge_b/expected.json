@@ -1,0 +1,6 @@
+{
+  "files_scanned": 4,
+  "counts": {"refresh_timeout": 5, "db_connection": 3, "invalid_token": 1},
+  "winner_evidence": {"auth.log": 1, "billing.log": 2},
+  "winner_files": ["auth.log", "billing.log", "worker.log"]
+}
