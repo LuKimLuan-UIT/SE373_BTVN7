@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from .. import paths
 from ..challenge_b_lab import ChallengeBLab
 from ..config import load_settings
+from ..challenge_b_scenarios import B2_DATASET, B2_TOTAL_LINES, B2_EXPECTED_COUNTS
 
 router = APIRouter()
 _lab = None
@@ -40,6 +41,7 @@ class ChatRequest(B1Request):
 
 
 class CompactRequest(B1Request):
+    technique: Literal["truncation", "structured"] = "truncation"
     keep_turns: int = Field(default=2, ge=1, le=50, strict=True)
 
 
@@ -72,7 +74,7 @@ def chat(request: ChatRequest):
 @router.post("/api/challenge-b/chat/compact")
 def chat_compact(request: CompactRequest):
     def action(lab):
-        result = lab.compact(request.thread_id, keep_turns=request.keep_turns)
+        result = lab.compact(request.thread_id, keep_turns=request.keep_turns, technique=request.technique)
         return {"compact": result, "chat": lab.chat_view(request.thread_id)}
     return execute(action)
 
@@ -110,7 +112,7 @@ def status():
         verification_path = paths.PROJECT_ROOT / "reports" / "challenge-b-live" / "results.json"
         verification = json.loads(verification_path.read_text(encoding="utf-8")) if verification_path.exists() else None
         return {"model": lab.settings.model_name, "namespace": "challenge-b-lab", "fixture_files": 4,
-                "fixture_scale": 80, "expected_counts": {"refresh_timeout": 400, "db_connection": 240, "invalid_token": 80},
+                "dataset": B2_DATASET, "fixture_lines": B2_TOTAL_LINES, "expected_counts": B2_EXPECTED_COUNTS,
                 "results": lab.results(), "verification": verification}
     return execute(view)
 
@@ -122,7 +124,7 @@ def seed(request: ModeRequest):
 
 @router.post("/api/challenge-b/b1/compact")
 def compact(request: CompactRequest):
-    return execute(lambda lab: lab.compact(request.thread_id, keep_turns=request.keep_turns))
+    return execute(lambda lab: lab.compact(request.thread_id, keep_turns=request.keep_turns, technique=request.technique))
 
 
 @router.post("/api/challenge-b/b1/continue")

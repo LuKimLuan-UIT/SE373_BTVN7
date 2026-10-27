@@ -8,7 +8,8 @@ import uuid
 
 from langchain_core.tools import tool
 
-from .challenge_b_scenarios import QUESTION, truncation_history, prepare_logs
+from .challenge_b_scenarios import (QUESTION, truncation_history, prepare_large_logs,
+                                    B2_DATASET, B2_TOTAL_LINES, B2_EXPECTED_COUNTS)
 from .code_mode import build_code_tools
 from .context import WorkingContext, context_size
 from .graph import build_agent, build_model, append_checkpoint_context
@@ -21,6 +22,8 @@ from .memory_tools import build_memory_tools
 from .metrics import input_metrics, reduction
 from .runtime import Runtime
 from .truncation import truncate, RISK
+from .offline import OfflineCompactor
+from .context import CHECKPOINT_PREFIX
 from .code_mode import execute_code
 from .challenge_b_scenarios import CODE
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -30,7 +33,7 @@ class ChallengeBLab:
     def __init__(self, settings, root, *, model=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
-        self.logs = prepare_logs(self.root / "logs")
+        self.logs = prepare_large_logs(self.root / "logs")
         self.settings = replace(settings, user_id="challenge-b-lab", memory_dir=str(self.root / "memory"),
                                 sessions_dir=str(self.root / "sessions"), code_mode_logs_dir=None)
         self.model = model
@@ -79,31 +82,62 @@ class ChallengeBLab:
         self._write_ui(thread, {"execution": execution, "timeline": [{"kind": "scenario", "content": "Phiên mẫu có 3 lượt user→assistant. Lượt đầu chứa ràng buộc /refresh, cách tăng timeout thất bại và 1.600 dòng debug. Hai lượt cuối chỉ còn tình trạng 401 và chờ yêu cầu. Truncation giữ 2 lượt cuối sẽ làm mất thông tin của lượt đầu khỏi context; archive vẫn giữ nguyên."}], "turns": []})
         return result
 
-    def compact(self, thread, *, keep_turns=2):
+    def compact(self, thread, *, keep_turns=2, technique="truncation"):
+        if technique not in {"truncation", "structured"}:
+            raise ValueError("Kỹ thuật phải là truncation hoặc structured")
         working = self._working(thread)
-        result = truncate(working, keep_turns=keep_turns)
+        ui = self._read_ui(thread)
+        offline = ui.get("execution") == "offline"
+        if technique == "truncation":
+            result = truncate(working, keep_turns=keep_turns)
+        else:
+            try:
+                if offline:
+                    result = working.compact(OfflineCompactor())
+                else:
+                    rt, _ = self.runtime()
+                    result = rt.compact(thread)
+            except Exception as exc:
+                self._record_failure(thread, exc, kind="compact")
+                raise
+            requests, usage = result["compaction_requests"], result["compaction_usage"]
+            complete = len(usage) == requests
+            measurement = {
+                "requests": requests,
+                "actual_input_tokens": 0 if offline else sum(u["input_tokens"] for u in usage)
+                    if complete and requests and all(isinstance(u.get("input_tokens"), int) for u in usage) else None,
+                "actual_output_tokens": 0 if offline else sum(u["output_tokens"] for u in usage)
+                    if complete and requests and all(isinstance(u.get("output_tokens"), int) for u in usage) else None,
+                "estimated_input_tokens": result["compaction_input_estimate"],
+                "kind": "compact", "source": "Offline extraction; no API" if offline else "Provider usage when available",
+            }
+            ui["turns"].append(measurement)
+            result.update(technique="structured", measurement=measurement,
+                          risk="Checkpoint có thể thiếu hoặc sai thông tin; cần kiểm tra continuation.",
+                          summary_method="offline-extraction" if offline else "model")
         result["reduction_percent_estimated"] = reduction(result["before"]["estimated_tokens"], result["after"]["estimated_tokens"])
         active, archive = working.load()
+        result["archive_preserved"] = True
         result["active_preview"] = [{"role": m.type, "content": m.content} for m in active]
         result["thread_id"] = thread
-        ui = self._read_ui(thread)
         result["execution"] = ui.get("execution", "offline")
-        ui["timeline"].append({"kind": "compact", "content": "Đã bỏ các lượt cũ bằng truncation.",
-                               "before": result["before"], "after": result["after"],
-                               "technique": "truncation", "keep_turns": keep_turns,
-                               "dropped_turns": result["dropped_turns"],
-                               "dropped_messages": result["dropped_messages"], "risk": RISK})
+        event = {"kind": "compact", "content": "Đã bỏ các lượt cũ bằng truncation." if technique == "truncation"
+                 else "Đã compact thành checkpoint có cấu trúc.",
+                 **{key: result[key] for key in ("before", "after", "technique", "risk", "keep_turns", "dropped_turns",
+                    "dropped_messages", "checkpoint", "measurement", "summary_method") if key in result}}
+        ui["timeline"].append(event)
         self._write_ui(thread, ui)
         self.save("b1-compact", result)
         return result
 
     def continue_task(self, thread):
         ui = self._read_ui(thread)
-        if not any(m.get("technique") == "truncation" for m in ui["timeline"]):
-            raise ValueError("Cần truncation trước khi kiểm tra continuation")
+        latest = next((m for m in reversed(ui["timeline"]) if m["kind"] in {"compact", "reset"}), None)
+        if latest is None or latest["kind"] != "compact":
+            raise ValueError("Cần compact trước khi kiểm tra continuation")
         chat = self.send(thread, "Tiếp tục: nêu điều còn biết và thông tin còn thiếu từ context hiện tại. Không đoán lại ràng buộc hoặc bằng chứng đã mất.")
         data = {"thread_id": thread, "reply": chat["timeline"][-1]["content"],
-                "measurement": chat["usage"]["last"], "execution": chat["execution"], "technique": "truncation"}
+                "measurement": chat["usage"]["last"], "execution": chat["execution"], "technique": latest["technique"]}
         self.save("b1-continuation", data)
         return data
 
@@ -115,6 +149,7 @@ class ChallengeBLab:
         trace = data["trace"]
         prompts_text = "\n".join(str(m["content"]) for p in trace["prompts"] for m in p)
         result = {"mode": mode, "question": QUESTION, "reply": data["reply"],
+                  "dataset": B2_DATASET, "fixture_lines": B2_TOTAL_LINES,
                   "measurement": input_metrics(trace["prompts"], tools, trace["usage"]),
                   "model": self.settings.model_name, "elapsed_seconds": trace["elapsed_seconds"],
                   "raw_marker_in_requests": "RAW_LOG_ONLY_MARKER" in prompts_text,
@@ -131,7 +166,7 @@ class ChallengeBLab:
                     except (TypeError, ValueError):
                         pass
             result["findings"] = summaries[-1] if summaries else None
-            expected = {"refresh_timeout": 400, "db_connection": 240, "invalid_token": 80}
+            expected = B2_EXPECTED_COUNTS
             result["golden_counts_match"] = bool(summaries) and {
                 g["type"]: g["count"] for g in summaries[-1]["error_summary"]} == expected
         self.save("b2-" + mode, result)
@@ -261,6 +296,7 @@ class ChallengeBLab:
         events = trace["events"] if mode == "code" else [e for e in trace["events"] if e["kind"] == "call"]
         ui["timeline"].extend([{"kind": "user", "content": message},
                                {"kind": "assistant", "content": data["reply"], "measurement": measurement,
+                                "dataset": {"id": B2_DATASET, "files": 4, "lines": B2_TOTAL_LINES},
                                 "events": events, "mode": mode, "prompts": trace["prompts"] if mode == "code" else None}])
         self._write_ui(thread, ui)
         return self.chat_view(thread)
@@ -285,9 +321,11 @@ class ChallengeBLab:
                       {"kind": "result", "name": name, "content": "Raw output giữ trong archive; offline không gửi model." if mode == "native" else output}]
         elif re.search(r"tiếp tục|bước kế|constraint|ràng buộc|đã thử", message, re.IGNORECASE):
             excerpts = [f"{m.type}: {str(m.content)[:1000]}" for m in active if m.type in {"human", "ai"} and str(m.content).strip()]
-            answer = "[Offline · trích active context, không có LLM]\n" + "\n".join(excerpts[-4:]) + "\n" + RISK + " Không tự đọc archive để khôi phục thông tin đã bỏ."
+            checkpoint = next((str(m.content)[len(CHECKPOINT_PREFIX):] for m in reversed(active)
+                               if str(m.content).startswith(CHECKPOINT_PREFIX)), None)
+            answer = "[Offline · trích active context, không có LLM]\n" + ("Checkpoint hiện tại:\n" + checkpoint if checkpoint else "\n".join(excerpts[-4:])) + "\nKhông tự đọc archive để khôi phục thông tin đã bỏ."
         else:
-            answer = "[Offline · không gọi model]\nChế độ này hỗ trợ: nạp phiên mẫu rồi truncation; hỏi bước kế tiếp/ràng buộc; hỏi đếm lỗi log. Tôi không suy luận tự do. Chọn Provider nếu muốn chat tổng quát."
+            answer = "[Offline · không gọi model]\nChế độ này hỗ trợ: nạp phiên mẫu rồi chọn Truncation hoặc Structured compaction; hỏi bước kế tiếp/ràng buộc; hỏi đếm lỗi log. Structured Offline trích xuất checkpoint theo mẫu. Tôi không suy luận tự do. Chọn Provider nếu muốn chat tổng quát."
         additions.append(AIMessage(content=answer))
         working.save([*active, *additions], [*archive, *additions])
         write_history(self.settings.sessions_dir, thread, [*archive, *additions], title="Challenge B · Offline")
@@ -296,6 +334,7 @@ class ChallengeBLab:
         ui = self._read_ui(thread)
         ui["turns"].append(measurement)
         ui["timeline"].extend([{"kind": "user", "content": message}, {"kind": "assistant", "content": answer,
+                               "dataset": {"id": B2_DATASET, "files": 4, "lines": B2_TOTAL_LINES} if events else None,
                                "measurement": measurement, "mode": "offline", "events": events}])
         self._write_ui(thread, ui)
         return self.chat_view(thread)

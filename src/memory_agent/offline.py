@@ -15,7 +15,8 @@ class OfflineCompactor:
         previous = next((Checkpoint.model_validate_json(str(m.content)[len(CHECKPOINT_PREFIX):])
                          for m in reversed(messages) if str(m.content).startswith(CHECKPOINT_PREFIX)), None)
         recent = narratives[-1] if narratives else (previous.current_state if previous else "Chưa có kết quả xử lý; cần đọc yêu cầu người dùng.")
-        action = re.search(r"(?:Tiếp theo|Bước kế tiếp|Next action|Next step)\s*[:：]?\s+(.+)", recent, re.IGNORECASE)
+        action = next((match for text in reversed(narratives)
+                       if (match := re.search(r"(?:Tiếp theo|Bước kế tiếp|Next action|Next step)\s*[:：]?\s+(.+)", text, re.IGNORECASE))), None)
         findings = list(previous.findings) if previous else []
         for m in messages:
             if m.type != "tool":
@@ -41,7 +42,7 @@ class OfflineCompactor:
         files = sorted({p for text in [recent, *findings] for p in re.findall(r"[\w./-]+\.(?:py|log|md|json)(?::\d+)?", text)})[:30]
         checkpoint = Checkpoint(
             goal=(previous.goal if previous else (humans[0][:1000] if humans else "Tiếp tục công việc trong phiên")),
-            current_state=recent[:2000], constraints=[x[:1000] for x in humans[-30:]],
+            current_state="\n".join(narratives[-3:])[:2000] if narratives else recent[:2000], constraints=[x[:1000] for x in humans[-30:]],
             findings=list(dict.fromkeys(findings))[:30], failed_attempts=list(dict.fromkeys(failed))[:30], files=files,
             next_action=(action[1][:1000] if action else previous.next_action if previous else
                          "Tiếp tục theo yêu cầu gần nhất: " + (humans[-1][:800] if humans else "đọc và kiểm tra trạng thái phiên")),

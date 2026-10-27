@@ -382,33 +382,40 @@ uv run python scripts/demo_cli.py context
 
 ### Bài tập Challenge B — Context Management
 
-Bản web B hiện dùng **Truncation**: bỏ các lượt hội thoại cũ, giữ N lượt gần nhất
-(mặc định 2). Không gọi model để compact, không tạo summary/checkpoint, không tăng
-usage. Chỉ cắt tại ranh giới lượt user để giữ đầy đủ AI/tool calls/results. Ràng buộc
-và bằng chứng nằm trong lượt cũ có thể mất; đây là baseline có mất thông tin.
+Trang B hỗ trợ **hai chế độ compact**, chọn cạnh nút Compact:
 
-Mở **http://127.0.0.1:8000/challenge-b**. Chọn Offline để thử không tốn API:
-**Nạp phiên dài mẫu → ⓘ chọn số lượt giữ → Truncation**. Xem số lượt/messages bị bỏ,
-context trước/sau và cảnh báo mất thông tin. Ngưỡng demo mặc định 8.000, cảnh báo
-80%; chỉ nhắc, không tự compact và không phải context limit model.
+- **Structured compaction** (lựa chọn mặc định trên giao diện): tạo checkpoint có
+  goal, current_state, constraints, findings, failed_attempts, files, next_action,
+  open_questions. Giữ user/system/developer messages và kế hoạch AI ngắn gần nhất;
+  thay output AI/tool dài bằng checkpoint. Provider gọi model trong `.env`, cộng
+  usage cả lượt compact thành công hoặc lượt đã gọi nhưng thất bại.
+- **Truncation**: giữ N lượt gần nhất (mặc định 2) và prefix system/developer;
+  bỏ nguyên lượt cũ, không tách cặp tool call/result. Luôn 0 API, không tạo summary.
+  Dùng làm đối chứng vì ràng buộc và bằng chứng ở lượt cũ có thể mất.
 
-B2 giữ Code Mode qua `run_code`: đọc/lọc/đếm log trong runtime và trả findings
-có nguồn file/dòng; có đối chứng raw log riêng. Chỉ các lượt chat Provider mới gọi
-model trong `.env`. Offline trích active messages/đếm log bằng code, không suy luận
-LLM và không tự lấy lại thông tin đã truncation từ archive.
+Mở **http://127.0.0.1:8000/challenge-b** → chọn Offline hoặc Provider → nạp phiên
+mẫu → chọn chế độ → Compact → hỏi bước tiếp theo, ràng buộc và cách đã thử.
+Offline structured chỉ trích xuất theo mẫu, không gọi LLM và không chứng minh độ
+đúng của summary bằng model. Có thể mở checkpoint trên timeline. Ước lượng context
+và usage provider được hiển thị riêng. Ngưỡng mặc định 8.000 chỉ là ngưỡng demo.
 
-Context hiện tại là ước lượng snapshot active messages + instructions/memory index
-+ tools; phiên trống hiện 0 · chưa nạp. Usage cộng dồn input/output các request đã
-thực hiện. Archive và transcript giữ để xem lại, không tự gửi lại model sau truncation.
-Session/memory B vẫn nằm trong `data/challenge-b`, tách khỏi A.
+Đổi chế độ chỉ chọn cách cho lần compact tiếp theo, không tự chạy và không phục hồi
+thông tin đã cắt. Nạp phiên mẫu riêng cho từng chế độ để so sánh cùng đầu vào.
+Archive không tự gửi lại model. Structured chỉ cập nhật nếu JSON/schema hợp lệ và
+working context nhỏ hơn; các điều kiện này chưa bảo đảm giữ đúng ngữ nghĩa.
+
+B2 dùng cùng bộ **10.000 dòng log giả / 4 file** cho cả hai phương pháp.
+Đáp án mới: refresh_timeout 3.000, db_connection 1.800, invalid_token 600.
+`run_code` đọc/lọc/đếm log trong runtime, trả findings có bằng chứng;
+raw baseline chạy ở chat riêng. Offline đếm bằng code, Provider dùng model `.env`.
 
 **Reset tất cả B** xóa memory B và mở chat mới; **Reset context** chỉ bỏ active
-context phiên đang mở. Hai nút giữ archive cũ và không tác động Challenge A.
+context phiên đang mở. Giữ archive cũ, không tác động namespace Challenge A.
+API/CLI chung `/api/compact` và `demo_cli.py compact` giữ hành vi cũ.
 
-Xem [hướng dẫn B hiện tại](CHALLENGE_B_TRUNCATION_GUIDE.md). Báo cáo/scenario/decision
-cũ và các script checkpoint cũ được giữ để tái lập phiên bản trước; chúng không mô
-tả thuật toán compact của trang B hiện tại. API/CLI chung `/api/compact` và
-`demo_cli.py compact` vẫn giữ hành vi cũ để không thay đổi Challenge A.
+Xem [hướng dẫn hai chế độ](CHALLENGE_B_TRUNCATION_GUIDE.md) và
+[phần mô tả dùng cho báo cáo B1](B1_COMPACTION_REPORT.md). Các số đo trong báo cáo
+live cũ là của lần chạy đã lưu, không thay thế việc kiểm chứng giao diện hiện tại.
 
 ```powershell
 python -m pytest -q --basetemp=data/pytest-b

@@ -54,18 +54,18 @@ Quét tất cả file log: loại lỗi nào xuất hiện nhiều nhất, chín
 ở những file nào? Đưa bằng chứng file và số dòng.
 ```
 
-Kết quả chuẩn của fixture 4 log nhân 80:
+Kết quả chuẩn của bộ log giả mới: 4 file × 2.500 dòng = 10.000 dòng:
 
 | Loại lỗi | Count |
 |---|---:|
-| refresh_timeout | 400 |
-| db_connection | 240 |
-| invalid_token | 80 |
+| refresh_timeout | 3.000 |
+| db_connection | 1.800 |
+| invalid_token | 600 |
 
 Lỗi nhiều nhất ở `auth.log`, `billing.log`, `worker.log`. Evidence tiêu biểu:
 `auth.log:1`, `billing.log:2`, message `Refresh request timed out`.
 Mở **Tool và findings** để xem code template và JSON count/evidence. Phải thấy
-4 file, `complete=true`, không có lỗi đọc. 80 dòng không parse được được báo riêng.
+4 file, `lines_scanned=10000`, `matched_records=5400`, `complete=true`, không có lỗi đọc và không có dòng lỗi định dạng. 4.600 dòng còn lại là INFO/WARN.
 
 Offline dùng template code cố định gọi runtime thật, không giả vờ model đã sinh
 code. Raw log không gửi LLM vì chế độ này hoàn toàn không có lời gọi LLM.
@@ -73,7 +73,7 @@ code. Raw log không gửi LLM vì chế độ này hoàn toàn không có lời
 ## 4. B2 - So context raw output với findings mà không tốn API
 
 1. Ghi lại context sau kịch bản 3; đặt tên đoạn chat qua nội dung/ghi chú khi chụp ảnh.
-2. Mở ⓘ → **Baseline riêng**. Ở màn hình rộng có nút **Đối chứng native / raw log**.
+2. Mở ⓘ → **Baseline riêng**. Nút **Baseline riêng · raw log** nằm trong menu ⓘ.
 3. Baseline tạo một chat riêng, dùng cùng câu hỏi và fixture; raw output nằm trong
    active/archive, còn câu trả lời được code tạo để đối chiếu dữ liệu.
 4. So thanh context của hai đoạn chat qua danh sách gần đây.
@@ -143,3 +143,14 @@ và công cụ gửi lại ở mỗi request; **Usage · cộng dồn phiên** c
 Để kiểm chứng: nạp phiên dài → Reset tất cả B → kiểm tra 0/chưa nạp → reload vẫn 0
 → gửi tin đầu → kiểm tra thanh context và **Xem context gửi model** (Provider).
 Trong Offline, thanh đo chỉ mô phỏng context; usage/API calls vẫn bằng 0.
+
+## Bộ log lớn và các kết quả cũ
+
+Bộ web hiện tại có mã `synthetic-10000-v1`, log sinh tự động với timestamp và
+request_id giả khác nhau. 3.000 refresh_timeout, 1.800 db_connection, 600 invalid_token;
+4.600 dòng INFO/WARN. Cùng một thư mục được dùng cho Code Mode và native baseline.
+Bộ fixture nhỏ và script CLI cũ giữ nguyên để tái lập báo cáo trước; số 400/240/80
+trong các báo cáo live cũ không phải đáp án của bộ 10.000 dòng. Không trộn usage
+đã chụp ở bộ cũ với lần chạy mới. Dùng chat Provider mới cho từng phương pháp,
+không bấm Compact giữa phép đo B2. Nếu provider từ chối raw input quá lớn, ghi
+nhận baseline thất bại, không tự gán usage hay tuyên bố chất lượng tương đương.

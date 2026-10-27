@@ -45,7 +45,8 @@ def test_page_is_separate_and_has_experiment_controls(page):
     assert 'href="/challenge-b"' in request(app, "GET", "/").text
     status = request(app, "GET", "/api/challenge-b/status").json()
     assert status["namespace"] == "challenge-b-lab"
-    assert status["expected_counts"]["refresh_timeout"] == 400
+    assert status["fixture_lines"] == 10000
+    assert status["expected_counts"]["refresh_timeout"] == 3000
 
 
 def test_b1_flow_does_not_change_a_memory_or_sessions(page):
@@ -245,7 +246,7 @@ def test_offline_flow_never_builds_or_calls_model_and_needs_no_key(tmp_path, mon
     assert data["context"]["estimated_input_tokens"] < before["context"]["estimated_input_tokens"]
     chat = lab.new_chat(execution="offline")
     logs = lab.send(chat["thread_id"], demo.QUESTION)
-    assert "400 lần" in logs["timeline"][-1]["content"]
+    assert "3000 lần" in logs["timeline"][-1]["content"]
     assert "auth.log:1" in logs["timeline"][-1]["content"]
     assert "RAW_LOG_ONLY_MARKER" not in json.dumps(logs["timeline"][-1]["events"])
     assert lab.model is None

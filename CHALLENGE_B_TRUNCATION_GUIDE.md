@@ -1,64 +1,69 @@
-# Challenge B hiện tại: Truncation
+# Challenge B: hai chế độ compact
 
-Phạm vi: web/API riêng `/challenge-b` và `/api/challenge-b/*`. Challenge A, API
-compact chung, Word và báo cáo đã có được giữ nguyên. Báo cáo checkpoint cũ mô tả
-phiên bản trước; không dùng các số đo đó để đánh giá bản truncation hiện tại.
+Phạm vi: `/challenge-b` và `/api/challenge-b/*`. Không thay namespace A hay API
+compact chung. Tên file được giữ để các liên kết cũ tiếp tục hoạt động.
 
-## Cách thử không tốn API
+## Cách đổi chế độ
 
-1. Mở `/challenge-b`, chọn **Offline · 0 API**.
-2. Bấm **Nạp phiên dài mẫu · B1**. Fixture có ba lượt user→assistant; ràng buộc,
-   bằng chứng file/dòng và log dài nằm trong lượt đầu.
-3. Mở ⓘ, chọn **giữ 2 lượt gần nhất**, bấm **Truncation** và xác nhận.
-4. Đối chiếu context trước/sau, số lượt/messages bỏ và usage không tăng.
-5. Nhắn “Tiếp tục: thông tin nào còn trong context hiện tại?”. Offline chỉ trích
-   các message đang giữ; không gọi LLM hoặc đọc archive để bù thông tin đã mất.
+Ô chọn cạnh nút Compact có Structured compaction (mặc định giao diện) và Truncation.
+Lựa chọn lưu trong trình duyệt, có thể đổi trước mỗi lần chạy; chọn chế độ không tự
+cắt, không gọi model, không reset chat. Khi đang xử lý thì khóa lựa chọn.
 
-Kỳ vọng: giữ hai lượt gần nhất, mất thông tin ở lượt đầu khỏi active context.
-Archive gốc và transcript vẫn đầy đủ để người kiểm tra đối chiếu. Reload trang
-giữ active context đã cắt và các mốc truncation trong chat.
+- Truncation: giữ N lượt gần nhất, chỉnh N trong ⓘ; 0 API ở cả Offline và Provider.
+- Structured + Provider: model trong .env tạo checkpoint; lượt gọi phát sinh usage.
+- Structured + Offline: OfflineCompactor trích xuất theo mẫu; 0 API, không phải LLM.
 
-Nếu cần đánh giá model thật, chọn Provider cho một chat riêng. Truncation vẫn
-0 API; các tin nhắn gửi model trước/sau truncation mới tiêu thụ usage. Không tự
-chạy lại provider để kiểm thử giao diện.
+Đổi chế độ không khôi phục dữ liệu đã bỏ khỏi active. Nạp lại phiên mẫu cho từng
+phép thử để so sánh trên cùng history. Archive vẫn giữ riêng, không tự đọc lại.
 
-## Quy tắc cắt
+## B1: chạy thử
 
-- Giữ nguyên system/developer instructions đứng đầu history và N lượt mới nhất
-  (1–50, mặc định 2). System prompt/memory index từ middleware vẫn được inject.
-- Không xét ý nghĩa, không giữ riêng user constraint cũ, không tổng hợp hoặc
-  tạo checkpoint. Tool call/result đi cùng trong lượt; không cắt chuỗi tool dở.
-- Không đủ lượt để cắt, tham số sai hoặc tool history chưa hoàn tất: báo lỗi,
-  không sửa context. Chỉ ghi khi kích thước active giảm.
-- Archive không tự gửi lại model. Nội dung ở đó không được coi là model còn biết.
-- Có thể truncation nhiều lần sau khi thêm lượt mới; các lượt cũ đã bỏ không quay lại.
+1. Chọn Offline nếu muốn thử không tốn API; Provider nếu cần kiểm tra model thật.
+2. Nạp phiên dài mẫu: có lỗi 401, ràng buộc /refresh và không log token, cách tăng
+   timeout thất bại, bằng chứng auth.py:184 / race.log:7 và kế hoạch concurrency test.
+3. Chọn Truncation, giữ 2 lượt và chạy. Kiểm tra thông tin ở lượt đầu bị mất.
+4. Nạp phiên mẫu mới, chọn Structured compaction và chạy. Mở Xem checkpoint.
+5. Hỏi bước kế tiếp, ràng buộc và cách đã thử. So sánh với history gốc và số đo.
 
-## Các kỹ thuật
+Offline chỉ kiểm tra trích xuất có quy tắc/data flow. Provider mới kiểm tra khả năng
+model tạo checkpoint và tiếp tục công việc. Không tự chạy Provider để kiểm thử UI.
 
-| Kỹ thuật | Cách làm | Rủi ro | Hiện trạng trên trang B |
-|---|---|---|---|
-| Truncation | Bỏ messages cũ theo lượt hoàn chỉnh | Mất ràng buộc | Đang dùng |
-| Tool-output pruning | Loại log thô/trùng lặp | Bỏ sót bằng chứng | Chưa bật |
-| Summary | LLM rút gọn history | Hallucinate, bỏ sót | Chưa bật |
-| Structured checkpoint | Lưu state theo schema | Thiếu trường quan trọng | Chưa bật |
-| Incremental summary | Nén từng giai đoạn | Lỗi tích lũy | Chưa bật |
-| Selective keep/drop | Giữ nguyên đoạn quan trọng | Chọn nhầm đoạn | Chưa bật |
+## Hai cơ chế
 
-Đánh giá trung thực: context giảm không đồng nghĩa giữ đủ thông tin. Nếu ràng
-buộc/next action bị mất, ghi nhận điều đó; không đánh dấu PASS cho tiêu chí giữ
-ràng buộc chỉ vì số token giảm. B2 vẫn dùng runtime đếm log có đáp án chuẩn.
+Truncation giữ prefix system/developer và N lượt human-led hoàn chỉnh; không ghép
+summary hoặc giữ riêng constraint cũ. Kiểm tra tool pairing trước/sau; từ chối nếu
+history chưa hoàn tất, số lượt không đủ hoặc context không nhỏ hơn.
 
-## API
+Structured tái sử dụng WorkingContext.compact: giữ các human/system/developer
+messages (trừ checkpoint/index cũ được thay), kế hoạch AI cuối nếu không có tool
+calls và dài tối đa 2.000 ký tự; tạo checkpoint JSON có goal, current_state,
+constraints, findings, failed_attempts, files, next_action, open_questions. Thay các
+AI/tool messages còn lại bằng checkpoint. Schema hợp lệ, tối đa 12.000 bytes và
+working context phải nhỏ hơn trước mới ghi thay đổi. Giữ nhiều human messages làm
+hạn chế mức giảm khi log dài nằm trong user input. Schema không kiểm chứng ngữ nghĩa.
 
-`POST /api/challenge-b/chat/compact` với `thread_id` và `keep_turns` trả kết quả
-truncation và chat mới nhất. `/api/challenge-b/b1/compact` cũng dùng truncation.
-Kết quả có `technique`, `dropped_turns`, `dropped_messages`, `before`, `after`,
-`archive_preserved`, `risk`, `compaction_requests=0`; không có `checkpoint`.
+Timeline phân biệt hai kỹ thuật. Structured có checkpoint mở rộng, phương pháp
+model/offline và usage. Usage cộng dồn cả lượt compact Provider đã gọi nhưng bị từ
+chối vì checkpoint sai hoặc lớn hơn. Thiếu usage được ghi unknown, không gán 0.
+
+## API và tương thích
+
+`POST /api/challenge-b/chat/compact` hoặc `/api/challenge-b/b1/compact`:
+
+```json
+{"thread_id":"b1-...", "technique":"structured", "keep_turns":2}
+```
+
+`technique` là `truncation` hoặc `structured`; bỏ trường này vẫn dùng truncation để
+không phá client cũ. `keep_turns` từ 1–50, chỉ tác động truncation. Structured trả
+checkpoint, measurement và summary_method; truncation trả số lượt/messages đã bỏ.
+Cả hai trả before/after ước lượng; không coi đó là usage thật hoặc tiền tiết kiệm.
 
 ## Kiểm thử
 
-`python -m pytest -q --basetemp=data/pytest-b`
+```powershell
+python -m pytest -q --basetemp=data/pytest-b
+```
 
-Kiểm thử dùng model giả/dữ liệu tạm, kiểm tra tool pairing, không gọi model khi
-truncation, context giảm, archive bất biến, usage không tăng, thông tin cũ không
-được đưa lại vào request, và dữ liệu A không thay đổi.
+Dùng model giả/dữ liệu tạm, kiểm tra hai mode, continuation, archive, usage thành
+công/thất bại/thiếu, lựa chọn frontend và request đúng kỹ thuật; không gọi API thật.
